@@ -143,11 +143,11 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
     ImGui::SetNextWindowSize(ImVec2(panelWidth, panelHeight));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22.0f, 18.0f));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.073f, 0.088f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.97f, 0.96f, 0.91f, 1.0f));
     ImGui::Begin("Máy bán hàng | Cửa hàng", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoSavedSettings);
-    ImGui::TextColored(ImVec4(0.31f, 0.87f, 0.75f, 1.0f), "MÁY BÁN HÀNG");
+    ImGui::TextColored(ImVec4(0.18f, 0.46f, 0.35f, 1.0f), "MINT FRESH");
     ImGui::SameLine();
     ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 130.0f);
     ImGui::TextDisabled("MÁY SỐ 03");
@@ -156,7 +156,7 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
     ImGui::TextDisabled("Chọn món, nạp tiền và nhận hàng bên dưới.");
     ImGui::Spacing();
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.075f, 0.096f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.93f, 0.94f, 0.88f, 1.0f));
     ImGui::BeginChild("Danh sách sản phẩm", ImVec2(0.0f, panelHeight * 0.43f), true);
     if (ImGui::BeginTable("Lưới sản phẩm", 2,
                           ImGuiTableFlags_SizingStretchSame |
@@ -169,13 +169,13 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
             ImGui::TableSetColumnIndex(i % 2);
             ImGui::PushID(product.id);
             if (i == machine.selectedIndex()) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.34f, 0.31f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.60f, 0.81f, 0.69f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(0.15f, 0.43f, 0.38f, 1.0f));
+                                      ImVec4(0.52f, 0.76f, 0.63f, 1.0f));
             } else {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.11f, 0.14f, 0.16f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.86f, 0.90f, 0.82f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(0.16f, 0.21f, 0.23f, 1.0f));
+                                      ImVec4(0.75f, 0.85f, 0.73f, 1.0f));
             }
             const std::string label =
                 product.name + "\n" + money(product.price) + "  /  Còn " +
@@ -198,7 +198,7 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
         ImGui::TextDisabled("SẢN PHẨM ĐÃ CHỌN");
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 115.0f);
-        ImGui::TextColored(ImVec4(0.31f, 0.87f, 0.75f, 1.0f), "CÒN %d",
+        ImGui::TextColored(ImVec4(0.18f, 0.46f, 0.35f, 1.0f), "CÒN %d",
                            selected->stock);
         ImGui::Text("%s", selected->name.c_str());
         ImGui::SameLine();
@@ -208,7 +208,7 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
     ImGui::Text("SỐ DƯ   %s", money(payment.balance()).c_str());
     ImGui::SameLine();
     if (payment.change() > 0.001f) {
-        ImGui::TextColored(ImVec4(0.31f, 0.87f, 0.75f, 1.0f),
+        ImGui::TextColored(ImVec4(0.18f, 0.46f, 0.35f, 1.0f),
                            "TIỀN THỪA %s", money(payment.change()).c_str());
     }
     ImGui::TextWrapped("%s", machine.status());
@@ -245,40 +245,7 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
     ImGui::PopStyleVar(2);
 }
 
-void drawLcdOverlay(const VendingMachine& machine, const Payment& payment,
-                    const Camera& camera, int sceneWidthPixels, int frameHeightPixels,
-                    float sceneWidthPoints, float frameHeightPoints) {
-    if (sceneWidthPixels <= 0 || frameHeightPixels <= 0) {
-        return;
-    }
-    const Product* selected = machine.selectedProduct();
-    if (!selected) {
-        return;
-    }
-    const glm::mat4 viewProjection =
-        camera.projectionMatrix(static_cast<float>(sceneWidthPixels) /
-                                static_cast<float>(frameHeightPixels)) *
-        camera.viewMatrix();
-    const glm::vec4 clip = viewProjection * glm::vec4(1.68f, 4.55f, 0.86f, 1.0f);
-    if (clip.w <= 0.0f) {
-        return;
-    }
-    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-    if (ndc.x < -1.0f || ndc.x > 1.0f || ndc.y < -1.0f || ndc.y > 1.0f) {
-        return;
-    }
-    const ImVec2 position((ndc.x + 1.0f) * 0.5f * sceneWidthPoints,
-                          (1.0f - ndc.y) * 0.5f * frameHeightPoints);
-    ImDrawList* drawList = ImGui::GetForegroundDrawList();
-    const std::string firstLine = selected->name + "  " + money(selected->price);
-    const std::string secondLine =
-        "SỐ DƯ " + money(payment.balance()) +
-        (selected->stock == 0 ? "  HẾT HÀNG" : "  SẴN SÀNG");
-    drawList->AddText(ImVec2(position.x - 27.0f, position.y - 13.0f),
-                      IM_COL32(105, 255, 216, 255), firstLine.c_str());
-    drawList->AddText(ImVec2(position.x - 27.0f, position.y + 1.0f),
-                      IM_COL32(105, 207, 196, 255), secondLine.c_str());
-}
+
 }
 
 int main() {
@@ -295,7 +262,7 @@ int main() {
 #endif
 
     GLFWwindow* window =
-        glfwCreateWindow(1600, 960, "Mô phỏng máy bán hàng tự động 3D", nullptr, nullptr);
+        glfwCreateWindow(1600, 960, "MINT FRESH | Beverage Studio", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create an OpenGL 3.3 window.\n";
         glfwTerminate();
@@ -322,7 +289,13 @@ int main() {
         return 1;
     }
     ImGui::GetIO().FontDefault = vietnameseFont;
-    ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
+    auto& colors = ImGui::GetStyle().Colors;
+    colors[ImGuiCol_Text] = ImVec4(0.13f, 0.29f, 0.24f, 1.0f);
+    colors[ImGuiCol_TextDisabled] = ImVec4(0.36f, 0.48f, 0.41f, 1.0f);
+    colors[ImGuiCol_Button] = ImVec4(0.71f, 0.86f, 0.76f, 1.0f);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.58f, 0.79f, 0.66f, 1.0f);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.43f, 0.69f, 0.55f, 1.0f);
     ImGui::GetStyle().FrameRounding = 7.0f;
     ImGui::GetStyle().GrabRounding = 7.0f;
     ImGui_ImplGlfw_InitForOpenGL(window, false);
@@ -368,8 +341,6 @@ int main() {
             renderer.render(machine, animation, camera, sceneWidth, height);
             drawInterface(machine, payment, interaction, sceneWidthPoints,
                           panelWidthPoints, static_cast<float>(windowHeight));
-            drawLcdOverlay(machine, payment, camera, sceneWidth, height,
-                           sceneWidthPoints, static_cast<float>(windowHeight));
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             glfwSwapBuffers(window);

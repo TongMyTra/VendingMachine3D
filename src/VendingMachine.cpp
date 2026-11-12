@@ -28,11 +28,11 @@ const Product* VendingMachine::selectedProduct() const {
 }
 
 glm::vec3 VendingMachine::productPosition(int index) const {
-    const int column = index % 3;
-    const int row = index / 3;
-    return {-1.39f + static_cast<float>(column) * 0.94f,
-            4.56f - static_cast<float>(row) * 0.86f,
-            0.48f};
+    const int column = index % 4;
+    const int row = index / 4;
+    return {-1.62f + static_cast<float>(column) * 0.82f,
+            4.33f - static_cast<float>(row) * 1.32f,
+            0.43f};
 }
 
 bool VendingMachine::vendSelected(Payment& payment, Animation& animation) {

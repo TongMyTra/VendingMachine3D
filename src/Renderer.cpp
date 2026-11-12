@@ -8,6 +8,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -123,12 +124,37 @@ Renderer::Renderer(const std::string& shaderDirectory) {
                          face.normal);
         }
     }
+    // Tessellated rounded cube, reused for cabinet panels and controls.
+    roundedFirst_ = static_cast<GLint>(vertices.size() / 6);
+    for (const Face& face : cubeFaces) {
+        const auto a = cubeCorners[face.corners[0]];
+        const auto b = cubeCorners[face.corners[1]];
+        const auto d = cubeCorners[face.corners[3]];
+        constexpr int steps = 12;
+        for (int y = 0; y < steps; ++y) {
+            for (int x = 0; x < steps; ++x) {
+                for (int corner : triangleCorners) {
+                    const int dx = (corner == 1 || corner == 2) ? 1 : 0;
+                    const int dy = (corner == 2 || corner == 3) ? 1 : 0;
+                    const glm::vec3 point = a + (b - a) * (static_cast<float>(x + dx) / steps)
+                                             + (d - a) * (static_cast<float>(y + dy) / steps);
+                    const glm::vec3 inner = glm::clamp(point, glm::vec3(-0.43f), glm::vec3(0.43f));
+                    const glm::vec3 normal = glm::normalize(point - inner);
+                    appendVertex(vertices, inner + normal * 0.07f, normal);
+                }
+            }
+        }
+    }
+    roundedCount_ = static_cast<GLint>(vertices.size() / 6) - roundedFirst_;
     const auto cylinderRange = appendCylinder(vertices, 0.5f, 0.5f, 32);
     cylinderFirst_ = cylinderRange.first;
     cylinderCount_ = cylinderRange.second;
     const auto frustumRange = appendCylinder(vertices, 0.5f, 0.24f, 32);
     frustumFirst_ = frustumRange.first;
     frustumCount_ = frustumRange.second;
+    const auto coneRange = appendCylinder(vertices, 0.44f, 0.02f, 32);
+    coneFirst_ = coneRange.first;
+    coneCount_ = coneRange.second;
 
     glGenVertexArrays(1, &vao_);
     glGenBuffers(1, &vbo_);
@@ -200,7 +226,9 @@ void Renderer::drawMesh(const glm::mat4& viewProjection, const glm::vec3& positi
 
 void Renderer::drawBox(const glm::mat4& viewProjection, const glm::vec3& position,
                        const glm::vec3& scale, const glm::vec3& color, float emissive) {
-    drawMesh(viewProjection, position, scale, color, 0, 36, 1.0f, emissive);
+    const bool smallDetail = scale.x < 0.035f || scale.y < 0.035f;
+    drawMesh(viewProjection, position, scale, color,
+             smallDetail ? 0 : roundedFirst_, smallDetail ? 36 : roundedCount_, 1.0f, emissive);
 }
 
 void Renderer::drawCylinder(const glm::mat4& viewProjection, const glm::vec3& position,
@@ -209,6 +237,46 @@ void Renderer::drawCylinder(const glm::mat4& viewProjection, const glm::vec3& po
     drawMesh(viewProjection, position, scale, color,
              tapered ? frustumFirst_ : cylinderFirst_,
              tapered ? frustumCount_ : cylinderCount_);
+}
+
+// Small geometry font: labels stay attached to the cabinet when orbiting.
+void Renderer::drawText(const glm::mat4& vp, const std::string& text,
+                        glm::vec3 center, float height, glm::vec3 color) {
+    static const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$-";
+    static const std::array<std::array<int, 7>, 39> glyphs{{
+        {{14,17,17,31,17,17,17}},{{30,17,17,30,17,17,30}},
+        {{14,17,16,16,16,17,14}},{{30,17,17,17,17,17,30}},
+        {{31,16,16,30,16,16,31}},{{31,16,16,30,16,16,16}},
+        {{14,17,16,23,17,17,14}},{{17,17,17,31,17,17,17}},
+        {{31,4,4,4,4,4,31}},{{7,2,2,2,18,18,12}},
+        {{17,18,20,24,20,18,17}},{{16,16,16,16,16,16,31}},
+        {{17,27,21,21,17,17,17}},{{17,25,21,19,17,17,17}},
+        {{14,17,17,17,17,17,14}},{{30,17,17,30,16,16,16}},
+        {{14,17,17,17,21,18,13}},{{30,17,17,30,20,18,17}},
+        {{15,16,16,14,1,1,30}},{{31,4,4,4,4,4,4}},
+        {{17,17,17,17,17,17,14}},{{17,17,17,17,17,10,4}},
+        {{17,17,17,21,21,21,10}},{{17,17,10,4,10,17,17}},
+        {{17,17,10,4,4,4,4}},{{31,1,2,4,8,16,31}},
+        {{14,17,19,21,25,17,14}},{{4,12,4,4,4,4,14}},
+        {{14,17,1,2,4,8,31}},{{30,1,1,14,1,1,30}},
+        {{2,6,10,18,31,2,2}},{{31,16,16,30,1,1,30}},
+        {{14,16,16,30,17,17,14}},{{31,1,2,4,8,8,8}},
+        {{14,17,17,14,17,17,14}},{{14,17,17,15,1,1,14}},
+        {{0,0,0,0,0,6,6}},{{4,15,20,14,5,30,4}},
+        {{0,0,0,31,0,0,0}}
+    }};
+    const float pixel = height / 7.0f;
+    const float left = center.x - (static_cast<float>(text.size()) * 6.0f - 1.0f) * pixel * 0.5f;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const auto index = alphabet.find(text[i]);
+        if (index == std::string::npos) continue;
+        for (int row = 0; row < 7; ++row)
+            for (int col = 0; col < 5; ++col)
+                if (glyphs[index][row] & (1 << (4 - col)))
+                    drawBox(vp, {left + (i * 6 + col) * pixel,
+                                 center.y + (3 - row) * pixel, center.z},
+                            {pixel * 0.94f, pixel * 0.94f, 0.006f}, color, 0.15f);
+    }
 }
 
 void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& product,
@@ -222,7 +290,7 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
                      {0.34f, 0.025f, 0.34f}, {0.66f, 0.70f, 0.70f});
         drawCylinder(viewProjection, {position.x, position.y - 0.294f, position.z},
                      {0.34f, 0.018f, 0.34f}, {0.56f, 0.59f, 0.59f});
-        if (product.id == 1 || product.id == 3) {
+        if (product.id == 1 || product.id == 3 || product.id == 11) {
             drawCylinder(viewProjection, {position.x, position.y + 0.02f,
                                            position.z},
                          {0.348f, 0.20f, 0.348f}, {0.93f, 0.91f, 0.84f});
@@ -248,12 +316,23 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
                      {0.13f, 0.12f, 0.13f}, color);
         drawCylinder(viewProjection, {position.x, position.y + 0.43f, position.z},
                      {0.15f, 0.055f, 0.15f},
-                     product.id == 7 ? glm::vec3(0.90f, 0.25f, 0.05f)
+                     product.id == 6 ? glm::vec3(0.90f, 0.25f, 0.05f)
                                      : glm::vec3(0.12f, 0.32f, 0.72f));
         drawCylinder(viewProjection, {position.x, position.y - 0.055f, position.z},
                      {0.307f, 0.15f, 0.307f}, {0.92f, 0.92f, 0.84f});
         break;
     }
+    case ProductType::Cup:
+        drawCylinder(viewProjection, {position.x, position.y - 0.025f, position.z},
+                     {0.40f, 0.50f, 0.40f}, color, true);
+        drawCylinder(viewProjection, {position.x, position.y + 0.235f, position.z},
+                     {0.44f, 0.045f, 0.44f}, {0.96f, 0.94f, 0.86f});
+        drawCylinder(viewProjection, {position.x, position.y + 0.27f, position.z},
+                     {0.38f, 0.035f, 0.38f}, color);
+        drawBox(viewProjection, {position.x, position.y + 0.13f,
+                                 position.z + 0.205f},
+                {0.23f, 0.12f, 0.015f}, {0.96f, 0.91f, 0.78f});
+        break;
     case ProductType::Snack:
         drawBox(viewProjection, position, {0.40f, 0.53f, 0.28f}, color);
         drawBox(viewProjection, {position.x, position.y + 0.25f, position.z},
@@ -285,63 +364,76 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     }
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.025f, 0.035f, 0.05f, 1.0f);
+    glClearColor(0.97f, 0.95f, 0.90f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     const glm::mat4 viewProjection =
         camera.projectionMatrix(static_cast<float>(width) / static_cast<float>(height)) *
         camera.viewMatrix();
     glUseProgram(program_);
-    glUniform3f(lightLocation_, -3.0f, 7.0f, 4.0f);
+    glUniform3f(lightLocation_, -3.5f, 8.0f, 5.0f);
+    const auto eye = camera.position();
+    glUniform3fv(glGetUniformLocation(program_, "uCameraPosition"), 1, &eye[0]);
     glBindVertexArray(vao_);
 
-    drawBox(viewProjection, {0.0f, -0.12f, 0.0f}, {30.0f, 0.2f, 30.0f},
-            {0.12f, 0.14f, 0.16f});
+    const glm::vec3 mint{0.49f, 0.78f, 0.68f};
+    const glm::vec3 mintLight{0.65f, 0.86f, 0.77f};
+    const glm::vec3 cream{0.96f, 0.93f, 0.84f};
+    const glm::vec3 deepMint{0.20f, 0.43f, 0.36f};
 
-    // Brushed-metal cabinet shell and the dark interior behind the product window.
-    drawBox(viewProjection, {0.0f, 2.65f, -0.72f}, {4.65f, 5.3f, 0.12f},
-            {0.21f, 0.24f, 0.27f});
-    drawBox(viewProjection, {-2.26f, 2.65f, -0.02f}, {0.13f, 5.3f, 1.42f},
-            {0.30f, 0.33f, 0.36f});
-    drawBox(viewProjection, {2.26f, 2.65f, -0.02f}, {0.13f, 5.3f, 1.42f},
-            {0.30f, 0.33f, 0.36f});
-    drawBox(viewProjection, {0.0f, 5.27f, -0.02f}, {4.65f, 0.12f, 1.42f},
-            {0.35f, 0.38f, 0.40f});
-    drawBox(viewProjection, {0.0f, 0.03f, -0.02f}, {4.65f, 0.12f, 1.42f},
-            {0.32f, 0.35f, 0.37f});
-    drawBox(viewProjection, {-0.48f, 5.27f, 0.04f}, {3.52f, 0.09f, 1.40f},
-            {0.42f, 0.45f, 0.47f});
-    drawBox(viewProjection, {-0.48f, 0.03f, 0.04f}, {3.52f, 0.10f, 1.40f},
-            {0.38f, 0.41f, 0.43f});
-    drawBox(viewProjection, {-2.19f, 2.65f, 0.04f}, {0.10f, 5.12f, 1.40f},
-            {0.40f, 0.43f, 0.45f});
-    drawBox(viewProjection, {1.23f, 2.65f, 0.04f}, {0.10f, 5.12f, 1.40f},
-            {0.40f, 0.43f, 0.45f});
+    // Warm studio floor and a soft, flattened contact shadow.
+    drawBox(viewProjection, {0.0f, -0.16f, 0.0f}, {80.0f, 0.12f, 80.0f},
+            {0.94f, 0.91f, 0.84f});
+    drawCylinder(viewProjection, {0.08f, -0.085f, -0.06f}, {3.15f, 0.025f, 1.45f},
+                 {0.72f, 0.69f, 0.62f});
 
-    for (int shelf = 0; shelf < 5; ++shelf) {
-        const float productY = 4.56f - static_cast<float>(shelf) * 0.86f;
-        const float shelfY = productY - 0.38f;
-        drawBox(viewProjection, {-0.48f, shelfY, 0.39f}, {3.25f, 0.07f, 0.88f},
-                {0.45f, 0.49f, 0.51f});
-        drawBox(viewProjection, {-0.48f, shelfY + 0.05f, 0.84f},
-                {3.12f, 0.035f, 0.045f}, {0.66f, 0.82f, 0.88f}, 0.22f);
-        drawBox(viewProjection, {-2.03f, productY + 0.02f, 0.34f},
-                {0.035f, 0.52f, 0.07f}, {0.38f, 0.47f, 0.50f});
+    // Rounded-looking pastel shell, built from softly contrasting cabinet panels.
+    drawBox(viewProjection, {0.0f, 2.72f, -0.72f}, {4.70f, 5.44f, 0.14f},
+            mint);
+    drawBox(viewProjection, {-2.27f, 2.72f, -0.02f}, {0.14f, 5.25f, 1.34f},
+            mintLight);
+    drawBox(viewProjection, {2.27f, 2.72f, -0.02f}, {0.12f, 5.25f, 1.32f},
+            {0.40f, 0.70f, 0.60f});
+    drawBox(viewProjection, {0.0f, 5.37f, -0.02f}, {4.60f, 0.14f, 1.35f},
+            mint);
+    drawBox(viewProjection, {0.0f, 0.07f, -0.02f}, {4.60f, 0.14f, 1.35f},
+            mint);
+
+    // Display chamber with a warm cream interior and a clean white surround.
+    drawBox(viewProjection, {-0.43f, 2.78f, -0.70f}, {3.46f, 4.82f, 0.035f},
+            {0.82f, 0.89f, 0.82f});
+    drawBox(viewProjection, {-0.43f, 2.78f, -0.665f}, {3.30f, 4.66f, 0.035f},
+            {0.89f, 0.91f, 0.84f});
+    drawBox(viewProjection, {-2.05f, 2.76f, 0.015f}, {0.12f, 5.02f, 1.30f},
+            mint);
+    drawBox(viewProjection, {1.18f, 2.76f, 0.015f}, {0.12f, 5.02f, 1.30f},
+            mint);
+
+    // Three lit shelves; each shelf has four matching product positions.
+    for (int shelf = 0; shelf < 3; ++shelf) {
+        const float productY = 4.33f - static_cast<float>(shelf) * 1.32f;
+        const float shelfY = productY - 0.40f;
+        drawBox(viewProjection, {-0.43f, shelfY, 0.34f}, {3.18f, 0.075f, 0.88f},
+                {0.83f, 0.86f, 0.78f});
+        drawBox(viewProjection, {-0.43f, shelfY + 0.055f, 0.79f},
+                {3.10f, 0.028f, 0.035f}, {0.94f, 0.98f, 0.91f}, 0.45f);
+        drawBox(viewProjection, {-0.43f, shelfY - 0.09f, 0.80f},
+                {3.08f, 0.13f, 0.035f}, {0.75f, 0.88f, 0.79f});
     }
 
-    // Two vertical LED rails illuminate the product rows.
-    drawBox(viewProjection, {-2.02f, 2.72f, 0.61f}, {0.035f, 4.76f, 0.035f},
-            {0.42f, 0.83f, 0.96f}, 0.85f);
-    drawBox(viewProjection, {1.05f, 2.72f, 0.61f}, {0.035f, 4.76f, 0.035f},
-            {0.42f, 0.83f, 0.96f}, 0.85f);
+    // Soft white interior LED strips.
+    drawBox(viewProjection, {-1.97f, 2.78f, 0.57f}, {0.035f, 4.68f, 0.04f},
+            {0.96f, 0.99f, 0.91f}, 0.85f);
+    drawBox(viewProjection, {1.10f, 2.78f, 0.57f}, {0.035f, 4.68f, 0.04f},
+            {0.96f, 0.99f, 0.91f}, 0.85f);
 
     for (int i = 0; i < static_cast<int>(machine.products().size()); ++i) {
         const Product& product = machine.products()[static_cast<std::size_t>(i)];
         glm::vec3 position = machine.productPosition(i);
         if (animation.active() && animation.productIndex() == i) {
             const float progress = animation.progress();
-            position.x = glm::mix(position.x, -0.48f, progress);
-            position.y = glm::mix(position.y, 0.48f, progress);
+            position.x = glm::mix(position.x, -0.43f, progress);
+            position.y = glm::mix(position.y, 0.50f, progress);
             position.z = 0.48f;
             drawProduct(viewProjection, product, position, false);
         } else if (product.stock > 0) {
@@ -349,67 +441,110 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         }
     }
 
-    // Right-side payment controls, LCD, numeric keypad and cash/change slots.
-    drawBox(viewProjection, {1.68f, 2.66f, 0.715f}, {0.84f, 4.84f, 0.12f},
-            {0.15f, 0.17f, 0.19f});
-    drawBox(viewProjection, {1.68f, 4.55f, 0.79f}, {0.66f, 0.72f, 0.055f},
-            {0.025f, 0.11f, 0.13f});
-    drawBox(viewProjection, {1.68f, 4.55f, 0.825f}, {0.55f, 0.04f, 0.012f},
-            {0.19f, 0.94f, 0.75f}, 1.0f);
-    drawBox(viewProjection, {1.68f, 4.40f, 0.825f}, {0.42f, 0.025f, 0.012f},
-            {0.14f, 0.69f, 0.59f}, 0.75f);
-    drawBox(viewProjection, {1.68f, 4.26f, 0.825f}, {0.48f, 0.025f, 0.012f},
-            {0.14f, 0.69f, 0.59f}, 0.75f);
+    const std::array<const char*, 12> labels{{
+        "COLA", "SODA", "ENERGY", "LEMON", "WATER", "ORANGE",
+        "APPLE", "PEACH", "MILK TEA", "MILK", "COFFEE", "MATCHA"}};
+    for (int i = 0; i < 12; ++i) {
+        const auto position = machine.productPosition(i);
+        const auto& product = machine.products()[static_cast<std::size_t>(i)];
+        char tag[24];
+        std::snprintf(tag, sizeof(tag), "%02d $%.2f", product.id, product.price);
+        drawBox(viewProjection, {position.x, position.y - 0.49f, 0.825f},
+                {0.73f, 0.13f, 0.025f}, cream);
+        drawText(viewProjection, tag, {position.x, position.y - 0.49f, 0.844f}, 0.075f, deepMint);
+        if (product.stock > 0 && !(animation.active() && animation.productIndex() == i))
+            drawText(viewProjection, labels[i], {position.x, position.y, 0.652f}, 0.065f, deepMint);
+    }
+
+    // Cream control column with a mint bezel around the screen and keypad.
+    drawBox(viewProjection, {1.69f, 2.72f, 0.57f}, {0.93f, 4.84f, 0.24f},
+            cream);
+    drawBox(viewProjection, {1.69f, 4.60f, 0.72f}, {0.73f, 0.77f, 0.08f},
+            deepMint);
+    drawBox(viewProjection, {1.69f, 4.60f, 0.77f}, {0.65f, 0.68f, 0.035f},
+            {0.77f, 0.91f, 0.80f});
+    drawBox(viewProjection, {1.69f, 4.76f, 0.794f}, {0.48f, 0.035f, 0.012f},
+            {0.23f, 0.54f, 0.43f}, 0.7f);
+    drawBox(viewProjection, {1.69f, 4.60f, 0.794f}, {0.42f, 0.025f, 0.012f},
+            {0.31f, 0.61f, 0.48f}, 0.55f);
+    drawBox(viewProjection, {1.69f, 4.45f, 0.794f}, {0.48f, 0.025f, 0.012f},
+            {0.31f, 0.61f, 0.48f}, 0.55f);
+
+    drawText(viewProjection, "SELECT", {1.69f, 4.78f, 0.82f}, 0.085f, deepMint);
+    drawText(viewProjection, "A DRINK", {1.69f, 4.61f, 0.82f}, 0.075f, deepMint);
+    if (const Product* selected = machine.selectedProduct()) {
+        char price[24];
+        std::snprintf(price, sizeof(price), "%02d $%.2f", selected->id, selected->price);
+        drawText(viewProjection, price, {1.69f, 4.44f, 0.82f}, 0.065f, deepMint);
+    }
 
     for (int key = 0; key < 12; ++key) {
         const int row = key / 3;
         const int column = key % 3;
-        const float x = 1.48f + static_cast<float>(column) * 0.20f;
-        const float y = 3.63f - static_cast<float>(row) * 0.20f;
-        drawBox(viewProjection, {x, y, 0.805f}, {0.13f, 0.12f, 0.07f},
-                {0.45f, 0.48f, 0.50f});
-        drawBox(viewProjection, {x, y, 0.846f}, {0.075f, 0.065f, 0.012f},
-                {0.72f, 0.76f, 0.77f});
+        const float x = 1.46f + static_cast<float>(column) * 0.22f;
+        const float y = 3.70f - static_cast<float>(row) * 0.22f;
+        drawBox(viewProjection, {x, y, 0.72f}, {0.15f, 0.15f, 0.08f},
+                {0.77f, 0.87f, 0.79f});
+        drawBox(viewProjection, {x, y, 0.765f}, {0.095f, 0.09f, 0.012f},
+                {0.97f, 0.95f, 0.87f});
     }
 
-    drawBox(viewProjection, {1.68f, 2.57f, 0.805f}, {0.48f, 0.055f, 0.075f},
-            {0.035f, 0.045f, 0.05f});
-    drawBox(viewProjection, {1.68f, 2.72f, 0.85f}, {0.50f, 0.035f, 0.02f},
-            {0.77f, 0.79f, 0.80f});
-    drawBox(viewProjection, {1.68f, 1.91f, 0.805f}, {0.48f, 0.12f, 0.08f},
-            {0.045f, 0.055f, 0.06f});
-    drawBox(viewProjection, {1.68f, 1.91f, 0.85f}, {0.32f, 0.025f, 0.018f},
-            {0.60f, 0.64f, 0.66f});
-    drawBox(viewProjection, {1.68f, 1.47f, 0.805f}, {0.48f, 0.30f, 0.10f},
-            {0.035f, 0.045f, 0.05f});
-    drawBox(viewProjection, {1.68f, 1.52f, 0.86f}, {0.32f, 0.045f, 0.018f},
-            {0.18f, 0.92f, 0.69f}, 0.65f);
+    for (int i = 0; i < 12; ++i) {
+        char number[4];
+        std::snprintf(number, sizeof(number), "%02d", i + 1);
+        drawText(viewProjection, number,
+                 {1.46f + (i % 3) * 0.22f, 3.70f - (i / 3) * 0.22f, 0.78f},
+                 0.09f, deepMint);
+    }
+    drawBox(viewProjection, {1.69f, 2.55f, 0.72f}, {0.51f, 0.06f, 0.09f},
+            {0.23f, 0.27f, 0.24f});
+    drawBox(viewProjection, {1.69f, 2.70f, 0.77f}, {0.51f, 0.035f, 0.02f},
+            {0.72f, 0.77f, 0.72f});
+    drawBox(viewProjection, {1.69f, 1.91f, 0.72f}, {0.53f, 0.13f, 0.10f},
+            {0.79f, 0.88f, 0.80f});
+    drawBox(viewProjection, {1.69f, 1.91f, 0.775f}, {0.34f, 0.026f, 0.018f},
+            {0.35f, 0.44f, 0.37f});
 
-    // Recessed pickup bay and its illuminated lip.
-    drawBox(viewProjection, {-0.48f, 0.49f, 0.60f}, {1.62f, 0.55f, 0.76f},
-            {0.065f, 0.075f, 0.08f});
-    drawBox(viewProjection, {-0.48f, 0.76f, 1.00f}, {1.26f, 0.045f, 0.055f},
-            {0.47f, 0.86f, 0.95f}, 0.9f);
+    // Wide delivery bay at the base with a softly illuminated mint lip.
+    drawBox(viewProjection, {-0.43f, 0.51f, 0.53f}, {1.62f, 0.55f, 0.72f},
+            {0.44f, 0.61f, 0.52f});
+    drawBox(viewProjection, {-0.43f, 0.52f, 0.68f}, {1.40f, 0.37f, 0.47f},
+            {0.13f, 0.20f, 0.18f});
+    drawBox(viewProjection, {-0.43f, 0.79f, 0.91f}, {1.38f, 0.045f, 0.055f},
+            {0.87f, 0.98f, 0.86f}, 0.65f);
 
-    // Slightly tinted transparent glass sits in front of products and shelves.
+    // Hollow-looking delivery opening, framed by four separate cream rails.
+    drawBox(viewProjection, {-0.43f, 0.51f, 0.94f}, {1.90f, 0.58f, 0.035f}, cream);
+    drawBox(viewProjection, {-0.43f, 0.50f, 0.965f}, {1.66f, 0.39f, 0.025f}, {0.12f, 0.18f, 0.16f});
+    drawBox(viewProjection, {-0.43f, 0.66f, 0.99f}, {1.62f, 0.12f, 0.04f}, cream);
+    drawBox(viewProjection, {-0.43f, 0.70f, 1.02f}, {0.35f, 0.045f, 0.05f}, mintLight);
+    for (float x : {-1.85f, 1.85f})
+        for (float z : {-0.45f, 0.45f})
+            drawCylinder(viewProjection, {x, -0.035f, z}, {0.22f, 0.13f, 0.22f}, deepMint);
+
+    // A soft mint pane over the products suggests clear reflective glass.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
     glDepthMask(GL_FALSE);
-    drawMesh(viewProjection, {-0.48f, 2.88f, 0.70f}, {3.17f, 4.20f, 0.018f},
-             {0.35f, 0.75f, 0.88f}, 0, 36, 0.12f);
+    drawMesh(viewProjection, {-0.43f, 2.78f, 0.72f}, {3.10f, 4.58f, 0.018f},
+             {0.79f, 0.95f, 0.86f}, 0, 36, 0.055f);
     glDepthMask(GL_TRUE);
-    glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);
 
-    // Bright corner indicators make the cabinet lighting visible in a static scene.
+    // Dedicated cream brand fascia above the glass.
+    drawBox(viewProjection, {0.0f, 5.10f, 0.69f}, {4.35f, 0.48f, 0.12f}, cream);
+    drawText(viewProjection, "MINT FRESH", {0.20f, 5.11f, 0.76f}, 0.26f, deepMint);
+    drawCylinder(viewProjection, {-1.31f, 5.07f, 0.77f}, {0.19f, 0.17f, 0.07f}, mint);
+    drawMesh(viewProjection, {-1.31f, 5.19f, 0.77f}, {0.19f, 0.20f, 0.07f},
+             mint, coneFirst_, coneCount_);
+
+    // Rounded corner bumpers and mint details complete the friendly silhouette.
     for (int side : {-1, 1}) {
-        for (int row = 0; row < 5; ++row) {
-            drawBox(viewProjection,
-                    {static_cast<float>(side) * 2.18f,
-                     4.65f - static_cast<float>(row) * 0.86f, 0.75f},
-                    {0.055f, 0.07f, 0.04f}, {0.28f, 0.83f, 1.0f}, 1.0f);
+        for (int end : {-1, 1}) {
+            drawCylinder(viewProjection,
+                         {static_cast<float>(side) * 2.20f,
+                          end < 0 ? 0.20f : 5.23f, 0.64f},
+                         {0.12f, 0.20f, 0.12f}, mint);
         }
     }
 

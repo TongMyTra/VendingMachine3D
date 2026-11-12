@@ -13,7 +13,7 @@ public:
     void zoom(float amount);
 
 private:
-    float yaw_{0.0f};
-    float pitch_{8.0f};
-    float distance_{7.5f};
+    float yaw_{24.0f};
+    float pitch_{9.0f};
+    float distance_{9.8f};
 };

@@ -29,10 +29,14 @@ private:
     GLint lightLocation_{};
     GLint opacityLocation_{};
     GLint emissiveLocation_{};
+    GLint roundedFirst_{};
+    GLint roundedCount_{};
     GLint cylinderFirst_{};
     GLint cylinderCount_{};
     GLint frustumFirst_{};
     GLint frustumCount_{};
+    GLint coneFirst_{};
+    GLint coneCount_{};
 
     void drawBox(const glm::mat4& viewProjection, const glm::vec3& position,
                  const glm::vec3& scale, const glm::vec3& color,
@@ -45,6 +49,8 @@ private:
     void drawMesh(const glm::mat4& viewProjection, const glm::vec3& position,
                   const glm::vec3& scale, const glm::vec3& color, GLint first,
                   GLint count, float opacity = 1.0f, float emissive = 0.0f);
+    void drawText(const glm::mat4& vp, const std::string& text,
+                  glm::vec3 center, float height, glm::vec3 color);
     GLuint compileShader(GLenum type, const std::string& path);
     static std::string readFile(const std::string& path);
 };

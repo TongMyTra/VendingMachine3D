@@ -8,12 +8,12 @@ glm::vec3 Camera::position() const {
     const float yawRadians = glm::radians(yaw_);
     const float pitchRadians = glm::radians(pitch_);
     return {distance_ * std::sin(yawRadians) * std::cos(pitchRadians),
-            2.0f + distance_ * std::sin(pitchRadians),
+            2.65f + distance_ * std::sin(pitchRadians),
             distance_ * std::cos(yawRadians) * std::cos(pitchRadians)};
 }
 
 glm::mat4 Camera::viewMatrix() const {
-    return glm::lookAt(position(), glm::vec3(0.0f, 2.0f, 0.0f),
+    return glm::lookAt(position(), glm::vec3(0.0f, 2.65f, 0.0f),
                        glm::vec3(0.0f, 1.0f, 0.0f));
 }
 

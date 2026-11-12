@@ -36,8 +36,9 @@ float Animation::dropOffset() const {
         return 0.0f;
     }
     const float progress = std::min(elapsed_ / duration, 1.0f);
-    const float shelf = static_cast<float>(productIndex_ / 3);
-    const float fallDistance = 4.06f - shelf * 0.86f;
+    const float shelf = static_cast<float>(productIndex_ / 4);
+    const float productY = 4.33f - shelf * 1.32f;
+    const float fallDistance = productY - 0.50f;
     return progress * progress * fallDistance;
 }
 

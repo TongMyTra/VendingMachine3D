@@ -7,6 +7,7 @@
 enum class ProductType {
     Can,
     Bottle,
+    Cup,
     Snack,
     Bakery,
 };
