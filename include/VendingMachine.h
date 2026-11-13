@@ -13,6 +13,8 @@ public:
 
     const std::vector<Product>& products() const;
     int selectedIndex() const;
+    int hoveredIndex() const { return hoveredIndex_; }
+    void hover(int index) { hoveredIndex_ = index; }
     void select(int index);
     const Product* selectedProduct() const;
     glm::vec3 productPosition(int index) const;
@@ -23,5 +25,6 @@ public:
 private:
     std::vector<Product> products_;
     int selectedIndex_{};
+    int hoveredIndex_{-1};
     const char* status_{"Vui lòng chọn sản phẩm."};
 };

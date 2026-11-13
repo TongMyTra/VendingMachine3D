@@ -2,7 +2,7 @@
 
 std::vector<Product> createProducts() {
     return {
-        {1, "Coca-Cola", ProductType::Can, 25000.0f, 8, {0.82f, 0.07f, 0.10f}},
+        {1, "Coca-Cola", ProductType::Can, 15000.0f, 8, {0.82f, 0.07f, 0.10f}},
         {2, "Pepsi", ProductType::Can, 24000.0f, 7, {0.08f, 0.22f, 0.66f}},
         {3, "Energy Pop", ProductType::Can, 28000.0f, 6, {0.70f, 0.78f, 0.24f}},
         {4, "Lemon Soda", ProductType::Can, 22000.0f, 7, {0.90f, 0.72f, 0.20f}},

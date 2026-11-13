@@ -8,6 +8,8 @@ class Animation;
 class Camera;
 class CashInteraction;
 class Payment;
+class HeldDrink;
+struct SceneOptions;
 struct Product;
 class VendingMachine;
 
@@ -19,10 +21,18 @@ public:
     Renderer& operator=(const Renderer&) = delete;
 
     void render(const VendingMachine& machine, const Animation& animation,
-                const Camera& camera, const CashInteraction& cash, const Payment& payment, int width, int height);
+                const Camera& camera, const CashInteraction& cash, const Payment& payment, const HeldDrink& drink, const SceneOptions& options, int width, int height);
 
 private:
+    void createProductTextures();
+    GLuint productTextures_[12]{};
+    bool useTexture_{};
+    GLuint activeTexture_{};
+    bool suppressGeometry_{};
+    bool wireframe_{};
     glm::mat4 parentTransform_{1.0f};
+    void drawHeldDrink(const glm::mat4& vp, const Camera& camera, const HeldDrink& drink);
+    void drawPressHand(const glm::mat4& vp, const Camera& camera, const Animation& animation);
     void drawCash(const glm::mat4& vp, const Camera& camera, const CashInteraction& cash);
     GLuint program_{};
     GLuint vao_{};
@@ -49,7 +59,7 @@ private:
                       const glm::vec3& scale, const glm::vec3& color,
                       bool tapered = false);
     void drawProduct(const glm::mat4& viewProjection, const Product& product,
-                     const glm::vec3& position, bool selected);
+                     const glm::vec3& position, bool selected, float opening = 0.0f);
     void drawMesh(const glm::mat4& viewProjection, const glm::vec3& position,
                   const glm::vec3& scale, const glm::vec3& color, GLint first,
                   GLint count, float opacity = 1.0f, float emissive = 0.0f);

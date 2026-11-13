@@ -7,6 +7,7 @@ public:
     void refund();
     float balance() const;
     float change() const;
+    void collectChange() { change_ = 0.0f; }
 
 private:
     float balance_{};

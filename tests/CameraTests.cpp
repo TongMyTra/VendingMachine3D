@@ -33,7 +33,7 @@ int main() {
     assert(horizontalDistance(start, fast.position()) < 0.01f); // No teleport.
     step(fast, 100, 1.0f, 1.0f, true);
     assert(!fast.transitioning());
-    assert(glm::length(fast.position() - glm::vec3(0.0f, Camera::eyeHeight, 7.6f)) < 0.001f);
+    assert(glm::length(fast.position() - glm::vec3(0.0f, Camera::eyeHeight, 6.8f)) < 0.001f);
     // Entire cabinet stays inside the scene viewport at common and narrow aspect ratios.
     for (float aspect : {1.1f, 0.66f, 0.4f, 2.0f}) {
         fast.setInteractionAspect(aspect);
@@ -82,5 +82,31 @@ int main() {
     const auto view = collision.viewMatrix();
     for (int i = 0; i < 4; ++i)
         for (int j = 0; j < 4; ++j) assert(std::isfinite(view[i][j]));
+    Camera modes;
+    const auto original = modes.position();
+    modes.toggleExternal();
+    modes.updatePresentation(0.01f, true, false, 0, {});
+    assert(modes.external() && modes.presentationActive());
+    assert(glm::length(modes.position() - original) < 1.0f); // Smooth entry.
+    for (int i = 0; i < 200; ++i) modes.updatePresentation(0.01f, true, false, 0, {});
+    assert(glm::length(modes.position() - glm::vec3(7, 5.4f, 10.5f)) < 0.01f);
+    modes.toggleExternal();
+    for (int i = 0; i < 300; ++i) modes.updatePresentation(0.01f, true, false, 0, {});
+    assert(!modes.presentationActive());
+    assert(glm::length(modes.position() - original) < 0.001f);
+    modes.updatePresentation(0.01f, true, true, 0.1f, {0, 4.33f, 0.5f});
+    assert(modes.presentationActive() && !modes.canInteract());
+    for (int i = 0; i < 100; ++i) modes.updatePresentation(0.01f, true, true, 0.7f, {-0.4f, 1.2f, 1});
+    for (int i = 0; i < 300; ++i) modes.updatePresentation(0.01f, true, false, 1, {-0.43f, 0.49f, 1.17f});
+    assert(!modes.presentationActive());
+    assert(glm::length(modes.position() - original) < 0.001f); // Saved POV pose survives playback.
+    Camera trash;
+    assert(!trash.canUseTrash());
+    step(trash, 140, 0, -1);
+    step(trash, 180, 1);
+    trash.look(0, 460); // Aim down at the front body, below the old hidden target.
+    assert(trash.canUseTrash());
+    trash.look(1800, 0);
+    assert(!trash.canUseTrash());
     std::cout << "Camera movement, sprint, collision, interaction and transition checks passed.\n";
 }

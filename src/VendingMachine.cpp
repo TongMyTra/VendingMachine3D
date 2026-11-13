@@ -36,8 +36,12 @@ glm::vec3 VendingMachine::productPosition(int index) const {
 }
 
 bool VendingMachine::vendSelected(Payment& payment, Animation& animation) {
-    if (animation.active()) {
+    if (animation.active() || animation.pressing()) {
         status_ = "Máy đang nhả hàng. Vui lòng chờ.";
+        return false;
+    }
+    if (animation.delivered()) {
+        status_ = "Vui lòng nhận đồ uống trong khay trước.";
         return false;
     }
     Product* product = selectedIndex_ >= 0 &&
