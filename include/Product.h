@@ -22,3 +22,7 @@ struct Product {
 };
 
 std::vector<Product> createProducts();
+
+inline std::string productCode(int index) {
+    return std::string(1, static_cast<char>('A' + index / 4)) + std::to_string(index % 4 + 1);
+}

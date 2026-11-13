@@ -33,14 +33,21 @@ int main() {
     cash.update(0.9f, payment);
     assert(payment.balance() == 80000); // Refund waits for animation.
     assert(!cash.hold(50000));
+    assert(cash.state() == CashInteraction::State::AwaitingCollection);
+    assert(!cash.cancel(payment));
+    assert(cash.collect());
+    assert(!cash.collect());
     cash.update(0.9f, payment);
     assert(payment.balance() == 0);
-    assert(payment.change() == 80000);
+    assert(payment.change() == 0);
     assert(!cash.active());
     assert(!cash.cancel(payment));
     assert(cash.hold(50000));
     assert(cash.cancel(payment)); // Uninserted note returns without creating credit.
     cash.update(2.0f, payment);
+    assert(cash.state() == CashInteraction::State::AwaitingCollection);
+    assert(cash.collect());
+    cash.update(1.0f, payment);
     assert(payment.balance() == 0);
     assert(cash.hold(20000));
     assert(cash.insert());

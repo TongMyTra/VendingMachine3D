@@ -8,6 +8,7 @@ public:
     Sound();
     ~Sound();
     void cashMotor();
+    void effect(int kind);
 private:
 #ifdef __APPLE__
     AudioQueueRef queue_{};

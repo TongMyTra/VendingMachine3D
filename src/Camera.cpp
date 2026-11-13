@@ -8,12 +8,14 @@ namespace {
 constexpr float dockYaw = -90.0f;
 glm::vec3 interactionPosition(float aspect) {
     // Leave room around the complete cabinet, including feet and header.
-    const float distance = std::max(7.6f, 2.75f / (std::tan(glm::radians(30.0f)) * aspect) + 1.0f);
+    const float distance = std::max(6.8f, 2.75f / (std::tan(glm::radians(30.0f)) * aspect) + 1.0f);
     return {0.0f, Camera::eyeHeight, distance};
 }
 
 bool walkable(const glm::vec3& p) {
     // Cabinet footprint expanded by the player's radius; axis-separated motion slides along it.
+    if (p.x > 3.15f && p.x < 6.45f && p.z > -0.50f && p.z < 2.1f) return false;
+    if (p.x > -5.8f && p.x < -4.0f && p.z > -0.5f && p.z < 1.3f) return false;
     return !(p.x > -2.65f && p.x < 2.65f && p.z > -1.10f && p.z < 1.35f);
 }
 float smooth(float t) { return t * t * (3.0f - 2.0f * t); }
@@ -27,10 +29,12 @@ glm::vec3 Camera::forwardDirection() const {
 }
 
 glm::vec3 Camera::position() const {
-    return feetPosition_ + glm::vec3(0.0f, bobOffset_, 0.0f);
+    if (presentationActive_) return presentationEye_;
+    return feetPosition_ + glm::vec3(0.0f, bobOffset_ - pickupMotion_ * 0.25f + std::sin(drinkTime_ * 4.0f) * 0.008f * drinkMotion_, 0.0f);
 }
 
 glm::mat4 Camera::viewMatrix() const {
+    if (presentationActive_) return glm::lookAt(presentationEye_, presentationTarget_, glm::vec3(0, 1, 0));
     return glm::lookAt(position(), position() + forwardDirection(), {0.0f, 1.0f, 0.0f});
 }
 
@@ -72,7 +76,7 @@ float Camera::interactionBlend() const {
 }
 
 bool Camera::canInteract() const {
-    if (interacting_ || feetPosition_.z < 1.35f || feetPosition_.z > 8.5f ||
+    if (presentationActive_ || interacting_ || feetPosition_.z < 1.35f || feetPosition_.z > 8.5f ||
         std::abs(feetPosition_.x) > 3.25f) return false;
     const glm::vec3 toPanel = glm::normalize(glm::vec3(1.69f, 3.9f, 0.8f) - position());
     return glm::dot(forwardDirection(), toPanel) > 0.35f;
@@ -98,7 +102,7 @@ void Camera::endInteraction() {
 }
 
 void Camera::update(float deltaTime, float forward, float strafe, bool sprint) {
-    const float dt = std::clamp(deltaTime, 0.0f, 0.05f);
+    const float dt = std::clamp(deltaTime, 0.0f, 0.25f);
     if (interacting_) {
         const bool wasTransitioning = transitioning();
         transitionTime_ = std::min(transitionTime_ + dt, transitionDuration);
@@ -129,4 +133,60 @@ void Camera::update(float deltaTime, float forward, float strafe, bool sprint) {
     bobPhase_ += travelled * 5.5f;
     const float targetBob = travelled > 0.0001f ? std::sin(bobPhase_) * 0.025f : 0.0f;
     bobOffset_ = glm::mix(bobOffset_, targetBob, 1.0f - std::exp(-14.0f * dt));
+}
+
+bool Camera::aimingAt(glm::vec3 point, float radius, float maxDistance) const {
+    if (presentationActive_) return false;
+    const glm::vec3 delta = point - position();
+    const float t = glm::dot(delta, forwardDirection());
+    return t > 0 && t < maxDistance && glm::length(delta - forwardDirection() * t) < radius;
+}
+void Camera::updatePresentation(float dt, bool cinematic, bool vending, float progress, glm::vec3 product) {
+    const glm::vec3 baseEye = feetPosition_ + glm::vec3(0, bobOffset_, 0);
+    const auto baseTarget = baseEye + forwardDirection();
+    const bool active = external_ || (cinematic && vending);
+    if (!active && !presentationActive_) return;
+    if (!presentationActive_) {
+        presentationEye_ = baseEye;
+        presentationTarget_ = baseTarget;
+        presentationActive_ = true;
+    }
+    glm::vec3 eye = baseEye, target = baseTarget;
+    if (cinematic && vending) {
+        const bool closeup = progress < 0.30f;
+        eye = product + (closeup ? glm::vec3(0.60f, 0.45f, 1.65f) : glm::vec3(1.7f, 0.9f, 2.7f));
+        target = product + glm::vec3(0, closeup ? -0.1f : 0, -0.08f);
+    } else if (external_) {
+        eye = {7.0f, 5.4f, 10.5f};
+        target = {0, 2.65f, 0};
+    }
+    const float t = 1 - std::exp(-7.0f * std::max(dt, 0.0f));
+    presentationEye_ = glm::mix(presentationEye_, eye, t);
+    presentationTarget_ = glm::mix(presentationTarget_, target, t);
+    if (glm::length(presentationTarget_ - presentationEye_) < 0.1f) presentationTarget_ = presentationEye_ + forwardDirection();
+    if (!active && glm::length(presentationEye_ - baseEye) < 0.005f && glm::length(presentationTarget_ - baseTarget) < 0.005f)
+        presentationActive_ = false;
+}
+
+bool Camera::canUseTrash() const {
+    if (presentationActive_) return false;
+    // Test the whole visible bin, rather than a small point hidden beneath its hood.
+    const glm::vec3 minimum{-5.6f, -0.10f, -0.20f};
+    const glm::vec3 maximum{-4.2f, 2.16f, 1.03f};
+    const auto origin = position();
+    const auto direction = forwardDirection();
+    float near = 0.0f, far = 4.5f;
+    for (int axis = 0; axis < 3; ++axis) {
+        if (std::abs(direction[axis]) < 0.0001f) {
+            if (origin[axis] < minimum[axis] || origin[axis] > maximum[axis]) return false;
+        } else {
+            float a = (minimum[axis] - origin[axis]) / direction[axis];
+            float b = (maximum[axis] - origin[axis]) / direction[axis];
+            if (a > b) std::swap(a, b);
+            near = std::max(near, a);
+            far = std::min(far, b);
+            if (near > far) return false;
+        }
+    }
+    return far >= near;
 }

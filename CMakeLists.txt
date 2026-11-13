@@ -79,6 +79,7 @@ add_executable(VendingMachine3D
     src/Payment.cpp
     src/CashInteraction.cpp
     src/Sound.cpp
+    src/HeldDrink.cpp
     src/Interaction.cpp
     src/Animation.cpp
 )
@@ -127,4 +128,41 @@ if(BUILD_TESTING)
         target_compile_options(CashTests PRIVATE -UNDEBUG)
     endif()
     add_test(NAME CashWorkflow COMMAND CashTests)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(VendingTests tests/VendingTests.cpp src/Animation.cpp src/Payment.cpp
+        src/CashInteraction.cpp src/VendingMachine.cpp src/Product.cpp src/Interaction.cpp src/Camera.cpp)
+    target_include_directories(VendingTests PRIVATE include)
+    target_link_libraries(VendingTests PRIVATE glm::glm)
+    if(MSVC)
+        target_compile_options(VendingTests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(VendingTests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME VendingWorkflow COMMAND VendingTests)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(HeldDrinkTests tests/HeldDrinkTests.cpp src/HeldDrink.cpp src/Product.cpp)
+    target_include_directories(HeldDrinkTests PRIVATE include)
+    target_link_libraries(HeldDrinkTests PRIVATE glm::glm)
+    if(MSVC)
+        target_compile_options(HeldDrinkTests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(HeldDrinkTests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME HeldDrinkWorkflow COMMAND HeldDrinkTests)
+endif()
+
+if(BUILD_TESTING AND APPLE)
+    add_executable(RendererSmokeTests tests/RendererSmokeTests.cpp src/Renderer.cpp
+        src/Animation.cpp src/Camera.cpp src/CashInteraction.cpp src/Payment.cpp
+        src/HeldDrink.cpp src/Product.cpp src/VendingMachine.cpp)
+    target_include_directories(RendererSmokeTests PRIVATE include)
+    target_link_libraries(RendererSmokeTests PRIVATE glad_gl_core_33 glm::glm OpenGL::GL)
+    target_compile_definitions(RendererSmokeTests PRIVATE GL_SILENCE_DEPRECATION
+        VM3D_SHADER_DIR="${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+    add_test(NAME RendererModes COMMAND RendererSmokeTests)
+    set_tests_properties(RendererModes PROPERTIES SKIP_RETURN_CODE 77)
 endif()
