@@ -6,6 +6,8 @@
 
 class Animation;
 class Camera;
+class CashInteraction;
+class Payment;
 struct Product;
 class VendingMachine;
 
@@ -17,9 +19,11 @@ public:
     Renderer& operator=(const Renderer&) = delete;
 
     void render(const VendingMachine& machine, const Animation& animation,
-                const Camera& camera, int width, int height);
+                const Camera& camera, const CashInteraction& cash, const Payment& payment, int width, int height);
 
 private:
+    glm::mat4 parentTransform_{1.0f};
+    void drawCash(const glm::mat4& vp, const Camera& camera, const CashInteraction& cash);
     GLuint program_{};
     GLuint vao_{};
     GLuint vbo_{};

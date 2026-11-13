@@ -1,8 +1,8 @@
 # 3D Interactive Vending Machine Simulation
 
-Mô phỏng máy bán hàng tự động 3D viết bằng C++17 và OpenGL, với phong cách kim loại đen/xám bạc, cửa kính trong, 5 tầng kệ, đèn LED, LCD, keypad, khe tiền và khay nhận hàng. Các sản phẩm procedural gồm lon Coca-Cola/Pepsi, chai nước, snack và bánh.
+Mô phỏng máy bán nước MINT FRESH viết bằng C++17 và OpenGL, với vỏ mint–cream, 3 kệ và 12 đồ uống procedural.
 
-Giao diện được chia hai vùng: máy 3D có thể xoay/zoom ở bên trái và bảng chọn sản phẩm/thanh toán 2D ở bên phải. Chọn hàng, tồn kho, giá, credit, tiền thừa và trạng thái LCD được đồng bộ cùng một luồng giao dịch.
+Người chơi di chuyển ở góc nhìn thứ nhất. Khi đến gần mặt trước máy và nhấn E, camera chuyển mượt tới góc chính diện, hiển thị trọn máy trong 0,75 giây rồi mở giao diện mua hàng. ESC trở lại di chuyển tại vị trí hiện tại. Tồn kho, giá, số dư và tiền thừa được đồng bộ với giao dịch.
 
 ## Yêu cầu
 
@@ -31,12 +31,19 @@ Trong VS Code, mở thư mục dự án, chọn kit compiler bằng CMake Tools,
 
 ## Điều khiển
 
-- Click sản phẩm trong khung 3D hoặc chọn trong danh sách ImGui.
-- Nhấn **Nạp $1**, **Nạp $2**, **Nạp $5** để nạp tiền mô phỏng.
-- Nhấn **MUA HÀNG** để mua; tiền thừa được trả tự động và hiển thị trên bảng điều khiển.
-- **TRẢ LẠI TIỀN** trả số dư còn lại qua khe trả tiền.
-- Giữ chuột phải để xoay camera, cuộn để thu phóng; dùng `A`/`D` hoặc phím mũi tên để chuyển lựa chọn.
-- Nhấn `Enter` để mua sản phẩm đang chọn.
+- **W / S:** Đi tới / lùi theo hướng nhìn; **A / D:** Đi ngang trái / phải.
+- **Chuột:** Xoay đầu; **Shift:** Đi nhanh. Camera có rung bước chân nhẹ.
+- **E:** Tương tác khi đứng gần phía trước và nhìn về máy; camera chuyển mượt sang góc chính diện, tự căn khoảng cách để thấy trọn máy.
+- **ESC:** Thoát tương tác để tiếp tục đi. Trong chế độ đi bộ, ESC thả chuột; click để bắt chuột lại. Mất focus cũng thả chuột và ngừng đi.
+- Trong chế độ tương tác: click sản phẩm hoặc chọn trong danh sách, dùng **mũi tên trái/phải** để đổi món, **Enter** để mua.
+- Chọn **10.000đ / 20.000đ / 50.000đ**: tay và tờ tiền 3D xuất hiện, camera chuyển mượt tới khu vực thanh toán. Dùng chuột hướng tâm vào khe nhận tiền, nhấn **E** để đưa tiền vào. Máy kéo tờ tiền vào trong rồi mới cộng số dư; có thể lặp lại để nạp thêm.
+- **MUA HÀNG** mua sản phẩm; **TRẢ LẠI TIỀN** chạy hoạt ảnh đưa tiền ra khe hoàn và tay nhận lại. **ESC** hủy giao dịch, đợi xử lý tiền đang chạy hoàn tất rồi hoàn số dư trước khi thoát.
+- Trong lúc đưa/nhận tiền và nhả hàng, các thao tác giao dịch xung đột bị khóa. Mọi giá và số dư dùng VNĐ.
+- Âm thanh mô-tơ nhận/trả tiền được tổng hợp qua AudioToolbox trên macOS, không cần tải file âm thanh. Các nền tảng khác hiện không phát âm thanh này.
+
+Tay được dựng phân cấp từ cổ tay, lòng bàn tay, bốn ngón và ngón cái. Tiền là tấm 3D mỏng có màu, viền, họa tiết và mệnh giá; đây là hình minh họa procedural. Luồng hoàn tiền tách tổng số dư thành các tờ phù hợp. Tay cho thao tác lấy và uống nước sẽ cần bổ sung cùng hệ thống cầm đồ uống.
+
+Tỉ lệ mô hình hiện tại: 1 đơn vị thế giới = 0,4 m, máy cao khoảng 2,18 m. Mắt người chơi ở 1,65 m trên mặt sàn, tốc độ đi 1,4 m/s và đi nhanh 2,8 m/s. Có va chạm với thân máy; không đi xuyên qua máy.
 
 Giao diện dùng phông Arial có sẵn trên macOS để hiển thị đầy đủ dấu tiếng Việt.
 
@@ -88,3 +95,12 @@ Thống nhất interface giữa các nhánh qua header trong `include/`; tích h
 2. Thêm vật liệu metallic/roughness, phản xạ kính, ánh sáng môi trường và bóng đổ.
 3. Cải thiện ray picking, animation cơ cấu đẩy hàng, âm thanh và trạng thái hoàn tiền.
 4. Bổ sung unit test cho thanh toán, tồn kho và các trường hợp cạnh biên.
+
+## Kiểm thử
+
+```bash
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+`CameraControls` kiểm tra di chuyển, va chạm, căn trọn máy, chuyển góc thanh toán và ngắm khe tiền. `CashWorkflow` kiểm tra nạp nhiều tờ, thời điểm cộng số dư, chặn thao tác trùng và hoàn tiền sau hoạt ảnh. Các kiểm thử này không mở cửa sổ OpenGL; cần chạy ứng dụng để đánh giá hình ảnh và âm thanh.

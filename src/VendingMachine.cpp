@@ -36,6 +36,10 @@ glm::vec3 VendingMachine::productPosition(int index) const {
 }
 
 bool VendingMachine::vendSelected(Payment& payment, Animation& animation) {
+    if (animation.active()) {
+        status_ = "Máy đang nhả hàng. Vui lòng chờ.";
+        return false;
+    }
     Product* product = selectedIndex_ >= 0 &&
                                selectedIndex_ < static_cast<int>(products_.size())
                            ? &products_[static_cast<std::size_t>(selectedIndex_)]

@@ -1,5 +1,7 @@
 #include "Animation.h"
 #include "Camera.h"
+#include "CashInteraction.h"
+#include "Sound.h"
 #include "Interaction.h"
 #include "Payment.h"
 #include "Renderer.h"
@@ -12,6 +14,8 @@
 #include <imgui_impl_opengl3.h>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -23,7 +27,12 @@ constexpr float sceneRatio = 0.66f;
 struct AppState {
     Camera* camera{};
     Interaction* interaction{};
-    bool orbiting{};
+    CashInteraction* cash{};
+    Payment* payment{};
+    Animation* animation{};
+    bool exitRequested{};
+    bool mouseCaptured{true};
+    float viewportRatio{1.0f};
     bool hasPreviousCursor{};
     double previousX{};
     double previousY{};
@@ -33,57 +42,47 @@ AppState* appState(GLFWwindow* window) {
     return static_cast<AppState*>(glfwGetWindowUserPointer(window));
 }
 
+void captureMouse(GLFWwindow* window, AppState& state, bool capture) {
+    state.mouseCaptured = capture;
+    state.hasPreviousCursor = false;
+    glfwSetInputMode(window, GLFW_CURSOR, capture ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+}
+
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
     AppState* state = appState(window);
-    if (!state) {
+    if (!state || button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
+    if (!state->camera->interacting()) {
+        if (!state->mouseCaptured && !ImGui::GetIO().WantCaptureMouse)
+            captureMouse(window, *state, true);
         return;
     }
-    if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-        double x = 0.0;
-        int windowWidth = 0;
-        glfwGetCursorPos(window, &x, nullptr);
-        glfwGetWindowSize(window, &windowWidth, nullptr);
-        state->orbiting = action == GLFW_PRESS &&
-                          x < static_cast<double>(windowWidth) * sceneRatio &&
-                          !ImGui::GetIO().WantCaptureMouse;
-        state->hasPreviousCursor = false;
+    if (state->cash->active()) {
+        if (!state->mouseCaptured && !ImGui::GetIO().WantCaptureMouse)
+            captureMouse(window, *state, true);
         return;
     }
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS &&
-        !ImGui::GetIO().WantCaptureMouse) {
-        double x = 0.0;
-        double y = 0.0;
-        int width = 0;
-        int height = 0;
-        glfwGetCursorPos(window, &x, &y);
-        glfwGetFramebufferSize(window, &width, &height);
-        int windowWidth = 0;
-        int windowHeight = 0;
-        glfwGetWindowSize(window, &windowWidth, &windowHeight);
-        if (windowWidth > 0 && windowHeight > 0) {
-            const float scaleX = static_cast<float>(width) / static_cast<float>(windowWidth);
-            const float scaleY = static_cast<float>(height) / static_cast<float>(windowHeight);
-            const float cursorX = static_cast<float>(x) * scaleX;
-            const int sceneWidth = static_cast<int>(static_cast<float>(width) * sceneRatio);
-            if (cursorX < static_cast<float>(sceneWidth)) {
-                state->interaction->click(cursorX, static_cast<float>(y) * scaleY,
-                                          sceneWidth, height, *state->camera);
-            }
-        }
-    }
+    if (state->camera->transitioning() || ImGui::GetIO().WantCaptureMouse) return;
+    double x = 0.0, y = 0.0;
+    int width = 0, height = 0, windowWidth = 0, windowHeight = 0;
+    glfwGetCursorPos(window, &x, &y);
+    glfwGetFramebufferSize(window, &width, &height);
+    glfwGetWindowSize(window, &windowWidth, &windowHeight);
+    if (windowWidth <= 0 || windowHeight <= 0) return;
+    const float cursorX = static_cast<float>(x * width / windowWidth);
+    const int sceneWidth = static_cast<int>(width * state->viewportRatio);
+    if (cursorX < sceneWidth)
+        state->interaction->click(cursorX, static_cast<float>(y * height / windowHeight),
+                                  sceneWidth, height, *state->camera);
 }
 
 void cursorPositionCallback(GLFWwindow* window, double x, double y) {
     ImGui_ImplGlfw_CursorPosCallback(window, x, y);
     AppState* state = appState(window);
-    if (!state || !state->orbiting) {
-        return;
-    }
-    if (state->hasPreviousCursor) {
-        state->camera->orbit(static_cast<float>(x - state->previousX),
-                             static_cast<float>(state->previousY - y));
-    }
+    if (!state || !state->mouseCaptured || (state->camera->interacting() && !state->cash->active())) return;
+    if (state->hasPreviousCursor)
+        state->camera->look(static_cast<float>(x - state->previousX),
+                            static_cast<float>(y - state->previousY));
     state->previousX = x;
     state->previousY = y;
     state->hasPreviousCursor = true;
@@ -91,29 +90,67 @@ void cursorPositionCallback(GLFWwindow* window, double x, double y) {
 
 void scrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
     ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
-    AppState* state = appState(window);
-    double x = 0.0;
-    int windowWidth = 0;
-    glfwGetCursorPos(window, &x, nullptr);
-    glfwGetWindowSize(window, &windowWidth, nullptr);
-    if (state && !ImGui::GetIO().WantCaptureMouse &&
-        x < static_cast<double>(windowWidth) * sceneRatio) {
-        state->camera->zoom(static_cast<float>(yOffset));
+}
+
+void focusCallback(GLFWwindow* window, int focused) {
+    ImGui_ImplGlfw_WindowFocusCallback(window, focused);
+    if (AppState* state = appState(window)) {
+        state->hasPreviousCursor = false;
+        if (!focused) captureMouse(window, *state, false);
     }
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
     AppState* state = appState(window);
-    if (!state || action != GLFW_PRESS || ImGui::GetIO().WantCaptureKeyboard) {
+    if (!state || action != GLFW_PRESS) return;
+    if (key == GLFW_KEY_ESCAPE) {
+        if (state->camera->interacting()) {
+            if (state->animation->active()) return;
+            state->exitRequested = true;
+            state->cash->cancel(*state->payment);
+        } else {
+            captureMouse(window, *state, false);
+        }
         return;
     }
-    if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
-        state->interaction->selectNext(-1);
-    } else if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D) {
-        state->interaction->selectNext(1);
-    } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
-        state->interaction->purchase();
+    if (ImGui::GetIO().WantCaptureKeyboard) return;
+    if (key == GLFW_KEY_E && state->cash->state() == CashInteraction::State::Held &&
+        state->mouseCaptured && state->camera->aimingAtPaymentSlot()) {
+        state->cash->insert();
+        return;
+    }
+    if (state->cash->active() || state->exitRequested) return;
+    if (key == GLFW_KEY_E && state->mouseCaptured && state->camera->beginInteraction()) {
+        captureMouse(window, *state, false);
+        return;
+    }
+    if (!state->camera->interacting() || state->camera->transitioning()) return;
+    if (key == GLFW_KEY_LEFT) state->interaction->selectNext(-1);
+    else if (key == GLFW_KEY_RIGHT) state->interaction->selectNext(1);
+    else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) state->interaction->purchase();
+}
+
+void drawWalkHud(const Camera& camera, const CashInteraction& cash, bool captured, float width, float height) {
+    const char* hint = cash.busy() ? "Đang xử lý tiền..." :
+        cash.state() == CashInteraction::State::Held ?
+        (camera.aimingAtPaymentSlot() ? "E: Đưa tiền vào khe   |   ESC: Hủy và hoàn tiền" :
+         "Di chuột nhìn vào khe nhận tiền   |   ESC: Hủy") : camera.interacting() ? "ESC: Trở lại di chuyển" :
+        !captured ? "Click để tiếp tục di chuyển" :
+        camera.canInteract() ? "E: Tương tác với MINT FRESH" :
+        "WASD: Di chuyển   |   Chuột: Nhìn   |   Shift: Đi nhanh";
+    ImGui::SetNextWindowPos(ImVec2(20.0f, height - 65.0f));
+    ImGui::SetNextWindowBgAlpha(0.90f);
+    ImGui::Begin("Hướng dẫn", nullptr, ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoSavedSettings);
+    ImGui::TextUnformatted(hint);
+    ImGui::End();
+    if ((!camera.interacting() || cash.state() == CashInteraction::State::Held) && captured) {
+        const ImVec2 center(width * 0.5f, height * 0.5f);
+        auto* draw = ImGui::GetForegroundDrawList();
+        draw->AddCircleFilled(center, 3.5f, IM_COL32(25, 70, 53, 200));
+        draw->AddCircleFilled(center, 1.5f, IM_COL32(245, 250, 240, 255));
     }
 }
 
@@ -133,11 +170,17 @@ ImFont* loadVietnameseFont() {
 
 std::string money(float amount) {
     std::ostringstream stream;
-    stream << "$" << std::fixed << std::setprecision(2) << amount;
+    const std::string digits = std::to_string(static_cast<int>(std::lround(amount)));
+    for (std::size_t i = 0; i < digits.size(); ++i) {
+        if (i && (digits.size() - i) % 3 == 0) stream << '.';
+        stream << digits[i];
+    }
+    stream << "đ";
     return stream.str();
 }
 
 void drawInterface(VendingMachine& machine, Payment& payment, Interaction& interaction,
+                   CashInteraction& cash, Camera& camera, bool vending,
                    float panelX, float panelWidth, float panelHeight) {
     ImGui::SetNextWindowPos(ImVec2(panelX, 0.0f));
     ImGui::SetNextWindowSize(ImVec2(panelWidth, panelHeight));
@@ -213,21 +256,16 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
     }
     ImGui::TextWrapped("%s", machine.status());
 
+    ImGui::BeginDisabled(cash.active() || camera.transitioning() || vending);
     const float buttonWidth = (ImGui::GetContentRegionAvail().x - 16.0f) / 3.0f;
-    if (ImGui::Button("Nạp $1", ImVec2(buttonWidth, 36.0f))) {
-        payment.insert(1.0f);
-        machine.setStatus("Đã nạp tiền. Tiền thừa sẽ được trả sau khi mua.");
-    }
+    if (ImGui::Button("10.000đ", ImVec2(buttonWidth, 36.0f))) cash.hold(10000);
     ImGui::SameLine();
-    if (ImGui::Button("Nạp $2", ImVec2(buttonWidth, 36.0f))) {
-        payment.insert(2.0f);
-        machine.setStatus("Đã nạp tiền. Tiền thừa sẽ được trả sau khi mua.");
-    }
+    if (ImGui::Button("20.000đ", ImVec2(buttonWidth, 36.0f))) cash.hold(20000);
     ImGui::SameLine();
-    if (ImGui::Button("Nạp $5", ImVec2(buttonWidth, 36.0f))) {
-        payment.insert(5.0f);
-        machine.setStatus("Đã nạp tiền. Tiền thừa sẽ được trả sau khi mua.");
-    }
+    if (ImGui::Button("50.000đ", ImVec2(buttonWidth, 36.0f))) cash.hold(50000);
+    ImGui::EndDisabled();
+    if (cash.active()) ImGui::TextWrapped("Cầm tiền: hướng chuột vào khe, nhấn E để nạp.");
+    ImGui::BeginDisabled(cash.active() || camera.transitioning() || vending);
 
     ImGui::Spacing();
     if (ImGui::Button("MUA HÀNG", ImVec2(ImGui::GetContentRegionAvail().x * 0.62f, 44.0f))) {
@@ -235,11 +273,12 @@ void drawInterface(VendingMachine& machine, Payment& payment, Interaction& inter
     }
     ImGui::SameLine();
     if (ImGui::Button("TRẢ LẠI TIỀN", ImVec2(-1.0f, 44.0f))) {
-        payment.refund();
-        machine.setStatus("Đã trả lại số dư qua khe trả tiền.");
+        cash.cancel(payment);
+        machine.setStatus("Đang hoàn tiền qua khe trả tiền...");
     }
     ImGui::Spacing();
-    ImGui::TextDisabled("GÓC NHÌN 3D  /  GIỮ CHUỘT PHẢI ĐỂ XOAY  /  CUỘN ĐỂ THU PHÓNG");
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("ESC: DI CHUYỂN  /  MŨI TÊN: CHỌN MÓN  /  ENTER: MUA");
     ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
@@ -308,19 +347,61 @@ int main() {
         Animation animation;
         Camera camera;
         Interaction interaction(machine, payment, animation);
-        AppState state{&camera, &interaction};
+        CashInteraction cash;
+        Sound sound;
+        AppState state;
+        state.camera = &camera;
+        state.interaction = &interaction;
+        state.cash = &cash;
+        state.payment = &payment;
+        state.animation = &animation;
         glfwSetWindowUserPointer(window, &state);
         glfwSetMouseButtonCallback(window, mouseButtonCallback);
         glfwSetCursorPosCallback(window, cursorPositionCallback);
         glfwSetScrollCallback(window, scrollCallback);
         glfwSetKeyCallback(window, keyCallback);
+        glfwSetWindowFocusCallback(window, focusCallback);
+        captureMouse(window, state, true);
 
         Renderer renderer(VM3D_SHADER_DIR);
         double previousTime = glfwGetTime();
         while (glfwWindowShouldClose(window) == GLFW_FALSE) {
             glfwPollEvents();
             const double currentTime = glfwGetTime();
-            animation.update(static_cast<float>(currentTime - previousTime));
+            const float deltaTime = std::clamp(static_cast<float>(currentTime - previousTime), 0.0f, 0.05f);
+            animation.update(deltaTime);
+            const auto previousCashState = cash.state();
+            cash.update(deltaTime, payment);
+            if (previousCashState == CashInteraction::State::Inserting && !cash.active())
+                machine.setStatus("Máy đã nhận tiền. Có thể nạp thêm hoặc chọn đồ uống.");
+            if (previousCashState == CashInteraction::State::Returning && !cash.active())
+                machine.setStatus("Đã nhận lại tiền. Giao dịch đã hủy.");
+            if (cash.takeSound()) sound.cashMotor();
+            if (state.exitRequested && !cash.busy()) {
+                if (!cash.cancel(payment)) {
+                    state.exitRequested = false;
+                    camera.endInteraction();
+                    captureMouse(window, state, true);
+                }
+            }
+            camera.focusPayment(cash.active());
+            if (camera.interacting() && !camera.transitioning() && !cash.active() && state.mouseCaptured)
+                captureMouse(window, state, false);
+            const bool walking = state.mouseCaptured && !camera.interacting() &&
+                                 glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
+                                 !ImGui::GetIO().WantCaptureKeyboard;
+            const auto down = [&](int key) { return walking && glfwGetKey(window, key) == GLFW_PRESS; };
+            int frameWidth = 0, frameHeight = 0;
+            glfwGetFramebufferSize(window, &frameWidth, &frameHeight);
+            if (frameHeight > 0)
+                camera.setInteractionAspect(static_cast<float>(frameWidth) * sceneRatio / frameHeight);
+            camera.update(deltaTime, static_cast<float>(down(GLFW_KEY_W)) - down(GLFW_KEY_S),
+                          static_cast<float>(down(GLFW_KEY_D)) - down(GLFW_KEY_A),
+                          down(GLFW_KEY_LEFT_SHIFT) || down(GLFW_KEY_RIGHT_SHIFT));
+            const float targetRatio = camera.interacting() ?
+                1.0f - (1.0f - sceneRatio) * camera.interactionBlend() : 1.0f;
+            state.viewportRatio += (targetRatio - state.viewportRatio) *
+                                   (1.0f - std::exp(-12.0f * deltaTime));
             previousTime = currentTime;
 
             ImGui_ImplOpenGL3_NewFrame();
@@ -333,14 +414,21 @@ int main() {
             int windowHeight = 0;
             glfwGetFramebufferSize(window, &width, &height);
             glfwGetWindowSize(window, &windowWidth, &windowHeight);
-            const int sceneWidth = static_cast<int>(static_cast<float>(width) * sceneRatio);
+            const int sceneWidth = static_cast<int>(static_cast<float>(width) * state.viewportRatio);
             const float sceneWidthPoints =
-                static_cast<float>(windowWidth) * sceneRatio;
+                static_cast<float>(windowWidth) * state.viewportRatio;
             const float panelWidthPoints =
                 static_cast<float>(windowWidth) - sceneWidthPoints;
-            renderer.render(machine, animation, camera, sceneWidth, height);
-            drawInterface(machine, payment, interaction, sceneWidthPoints,
-                          panelWidthPoints, static_cast<float>(windowHeight));
+            renderer.render(machine, animation, camera, cash, payment, sceneWidth, height);
+            if (camera.interacting() && !camera.transitioning())
+                drawInterface(machine, payment, interaction, cash, camera, animation.active(), sceneWidthPoints,
+                              panelWidthPoints, static_cast<float>(windowHeight));
+            if (cash.active() && !state.mouseCaptured && glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+                camera.focusPayment(true);
+                captureMouse(window, state, true);
+            }
+            drawWalkHud(camera, cash, state.mouseCaptured, sceneWidthPoints,
+                        static_cast<float>(windowHeight));
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             glfwSwapBuffers(window);

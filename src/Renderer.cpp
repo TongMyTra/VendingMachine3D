@@ -2,6 +2,10 @@
 
 #include "Animation.h"
 #include "Camera.h"
+#include "CashInteraction.h"
+#include "Payment.h"
+#include <glm/gtc/quaternion.hpp>
+
 #include "VendingMachine.h"
 
 #include <glm/gtc/constants.hpp>
@@ -213,7 +217,7 @@ GLuint Renderer::compileShader(GLenum type, const std::string& path) {
 void Renderer::drawMesh(const glm::mat4& viewProjection, const glm::vec3& position,
                         const glm::vec3& scale, const glm::vec3& color, GLint first,
                         GLint count, float opacity, float emissive) {
-    const glm::mat4 model = glm::translate(glm::mat4(1.0f), position) *
+    const glm::mat4 model = parentTransform_ * glm::translate(glm::mat4(1.0f), position) *
                             glm::scale(glm::mat4(1.0f), scale);
     const glm::mat4 mvp = viewProjection * model;
     glUniformMatrix4fv(modelLocation_, 1, GL_FALSE, &model[0][0]);
@@ -358,7 +362,7 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
 }
 
 void Renderer::render(const VendingMachine& machine, const Animation& animation,
-                      const Camera& camera, int width, int height) {
+                      const Camera& camera, const CashInteraction& cash, const Payment& payment, int width, int height) {
     if (width <= 0 || height <= 0) {
         return;
     }
@@ -448,7 +452,7 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         const auto position = machine.productPosition(i);
         const auto& product = machine.products()[static_cast<std::size_t>(i)];
         char tag[24];
-        std::snprintf(tag, sizeof(tag), "%02d $%.2f", product.id, product.price);
+        std::snprintf(tag, sizeof(tag), "%02d %.0fK", product.id, product.price / 1000.0f);
         drawBox(viewProjection, {position.x, position.y - 0.49f, 0.825f},
                 {0.73f, 0.13f, 0.025f}, cream);
         drawText(viewProjection, tag, {position.x, position.y - 0.49f, 0.844f}, 0.075f, deepMint);
@@ -474,9 +478,13 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     drawText(viewProjection, "A DRINK", {1.69f, 4.61f, 0.82f}, 0.075f, deepMint);
     if (const Product* selected = machine.selectedProduct()) {
         char price[24];
-        std::snprintf(price, sizeof(price), "%02d $%.2f", selected->id, selected->price);
+        std::snprintf(price, sizeof(price), "%02d %.0fK", selected->id, selected->price / 1000.0f);
         drawText(viewProjection, price, {1.69f, 4.44f, 0.82f}, 0.065f, deepMint);
     }
+
+    char credit[24];
+    std::snprintf(credit, sizeof(credit), "%.0f VND", payment.balance());
+    drawText(viewProjection, credit, {1.69f, 4.27f, 0.82f}, 0.060f, deepMint);
 
     for (int key = 0; key < 12; ++key) {
         const int row = key / 3;
@@ -533,7 +541,7 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
 
     // Dedicated cream brand fascia above the glass.
     drawBox(viewProjection, {0.0f, 5.10f, 0.69f}, {4.35f, 0.48f, 0.12f}, cream);
-    drawText(viewProjection, "MINT FRESH", {0.20f, 5.11f, 0.76f}, 0.26f, deepMint);
+    drawText(viewProjection, "MACHINE", {0.20f, 5.11f, 0.76f}, 0.26f, deepMint);
     drawCylinder(viewProjection, {-1.31f, 5.07f, 0.77f}, {0.19f, 0.17f, 0.07f}, mint);
     drawMesh(viewProjection, {-1.31f, 5.19f, 0.77f}, {0.19f, 0.20f, 0.07f},
              mint, coneFirst_, coneCount_);
@@ -548,6 +556,73 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         }
     }
 
+    drawCash(viewProjection, camera, cash);
     glBindVertexArray(0);
     glUseProgram(0);
+}
+
+void Renderer::drawCash(const glm::mat4& vp, const Camera& camera, const CashInteraction& cash) {
+    if (!cash.active()) return;
+    const auto cameraFrame = glm::inverse(camera.viewMatrix());
+    const auto heldFrame = cameraFrame * glm::translate(glm::mat4(1.0f), {0.35f, -0.34f, -0.95f});
+    const glm::vec3 heldPosition(heldFrame[3]);
+    const auto heldRotation = glm::quat_cast(glm::mat3(cameraFrame));
+    const auto slotRotation = glm::angleAxis(glm::radians(86.0f), glm::vec3(1, 0, 0));
+    const bool returning = cash.state() == CashInteraction::State::Returning;
+    const float p = cash.progress();
+    const auto ease = [](float t) { t = glm::clamp(t, 0.0f, 1.0f); return t * t * (3 - 2 * t); };
+    float reach = 0.0f;
+    glm::vec3 slot{1.69f, returning ? 1.91f : 2.55f, 0.98f};
+    if (cash.state() == CashInteraction::State::Inserting)
+        reach = ease(p / 0.45f) * (1.0f - ease((p - 0.82f) / 0.18f));
+    if (returning) reach = 1.0f - ease((p - 0.35f) / 0.65f);
+    auto handPosition = glm::mix(heldPosition, slot, reach);
+    const auto rotation = glm::slerp(heldRotation, slotRotation, reach);
+    parentTransform_ = glm::translate(glm::mat4(1), handPosition) * glm::mat4_cast(rotation);
+    const glm::vec3 skin{0.83f, 0.61f, 0.44f};
+    // Hierarchical wrist, palm, four articulated fingers and thumb.
+    drawBox(vp, {0, -0.30f, 0.07f}, {0.18f, 0.36f, 0.16f}, {0.27f, 0.49f, 0.42f});
+    drawBox(vp, {0, -0.12f, 0.045f}, {0.22f, 0.22f, 0.10f}, skin);
+    for (int finger = 0; finger < 4; ++finger) {
+        const float x = -0.08f + finger * 0.052f;
+        drawBox(vp, {x, 0.01f, 0.04f}, {0.043f, 0.13f, 0.05f}, skin);
+        drawBox(vp, {x, 0.08f, 0.015f}, {0.044f, 0.055f, 0.075f}, skin);
+    }
+    drawBox(vp, {-0.13f, -0.015f, 0.09f}, {0.09f, 0.065f, 0.065f}, skin);
+    // The bill moves independently after the hand reaches the slot.
+    glm::vec3 billPosition = handPosition;
+    if (cash.state() == CashInteraction::State::Inserting && p > 0.45f)
+        billPosition = slot + glm::vec3(0, 0, -0.55f * ease((p - 0.45f) / 0.43f));
+    if (returning && p < 0.35f)
+        billPosition = slot + glm::vec3(0, 0, -0.40f * (1.0f - ease(p / 0.35f)));
+    if (cash.state() != CashInteraction::State::Inserting || p < 0.90f) {
+        const auto billRotation = cash.state() == CashInteraction::State::Inserting && p > 0.45f ? slotRotation : rotation;
+        parentTransform_ = glm::translate(glm::mat4(1), billPosition) * glm::mat4_cast(billRotation);
+        const auto noteFrame = parentTransform_;
+        int remaining = cash.amount();
+        const std::array<int, 6> denominations{{50000, 20000, 10000, 5000, 2000, 1000}};
+        int noteCount = 0;
+        do {
+            int denomination = cash.amount();
+            if (returning) {
+                denomination = 1000;
+                for (int value : denominations) if (remaining >= value) { denomination = value; break; }
+            }
+            parentTransform_ = noteFrame * glm::translate(glm::mat4(1),
+                {noteCount * 0.015f, noteCount * 0.008f, noteCount * 0.012f});
+            const glm::vec3 noteColor = denomination == 10000 ? glm::vec3(0.86f, 0.68f, 0.35f) :
+                denomination == 20000 ? glm::vec3(0.45f, 0.65f, 0.88f) : glm::vec3(0.88f, 0.61f, 0.74f);
+            drawBox(vp, {0, 0, 0.02f}, {0.56f, 0.25f, 0.008f}, noteColor);
+            drawBox(vp, {0, 0, 0.026f}, {0.51f, 0.21f, 0.003f}, glm::mix(noteColor, glm::vec3(1), 0.24f));
+            for (int i = 0; i < 5; ++i)
+                drawBox(vp, {-0.23f + i * 0.022f, 0, 0.03f}, {0.008f, 0.18f, 0.002f}, noteColor * 0.8f);
+            drawCylinder(vp, {0.17f, 0, 0.03f}, {0.09f, 0.11f, 0.01f}, noteColor);
+            drawText(vp, std::to_string(denomination), {0.03f, 0.02f, 0.036f}, 0.052f, {0.20f, 0.29f, 0.24f});
+            drawText(vp, "VND", {0.03f, -0.06f, 0.036f}, 0.035f, {0.20f, 0.29f, 0.24f});
+            remaining -= denomination;
+            ++noteCount;
+        } while (returning && remaining > 0 && noteCount < 20);
+
+    }
+    parentTransform_ = glm::mat4(1.0f);
 }

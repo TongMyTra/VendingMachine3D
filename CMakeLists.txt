@@ -77,6 +77,8 @@ add_executable(VendingMachine3D
     src/Camera.cpp
     src/Renderer.cpp
     src/Payment.cpp
+    src/CashInteraction.cpp
+    src/Sound.cpp
     src/Interaction.cpp
     src/Animation.cpp
 )
@@ -92,6 +94,7 @@ target_compile_definitions(VendingMachine3D PRIVATE
 )
 
 if(APPLE)
+    target_link_libraries(VendingMachine3D PRIVATE "-framework AudioToolbox")
     target_compile_definitions(VendingMachine3D PRIVATE GL_SILENCE_DEPRECATION)
 endif()
 
@@ -99,4 +102,29 @@ if(MSVC)
     target_compile_options(VendingMachine3D PRIVATE /W4 /permissive-)
 else()
     target_compile_options(VendingMachine3D PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(CameraTests tests/CameraTests.cpp src/Camera.cpp)
+    target_include_directories(CameraTests PRIVATE include)
+    target_link_libraries(CameraTests PRIVATE glm::glm)
+    # Keep assertions active in Release builds as well.
+    if(MSVC)
+        target_compile_options(CameraTests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(CameraTests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME CameraControls COMMAND CameraTests)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(CashTests tests/CashTests.cpp src/CashInteraction.cpp src/Payment.cpp)
+    target_include_directories(CashTests PRIVATE include)
+    if(MSVC)
+        target_compile_options(CashTests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(CashTests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME CashWorkflow COMMAND CashTests)
 endif()
