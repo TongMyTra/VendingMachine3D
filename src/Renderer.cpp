@@ -137,6 +137,13 @@ Renderer::Renderer(const std::string& shaderDirectory) {
         throw std::runtime_error("Shader program link failed: " + log);
     }
 
+    floorLocation_ = glGetUniformLocation(program_, "uFloor");
+    reflectionPassLocation_ = glGetUniformLocation(program_, "uReflectionPass");
+    wireframeLocation_ = glGetUniformLocation(program_, "uWireframe");
+    textureEnabledLocation_ = glGetUniformLocation(program_, "uUseTexture");
+    cameraLocation_ = glGetUniformLocation(program_, "uCameraPosition");
+    reflectionSamplerLocation_ = glGetUniformLocation(program_, "uReflectionTexture");
+    viewportLocation_ = glGetUniformLocation(program_, "uViewportSize");
     mvpLocation_ = glGetUniformLocation(program_, "uMVP");
     modelLocation_ = glGetUniformLocation(program_, "uModel");
     colorLocation_ = glGetUniformLocation(program_, "uColor");
@@ -203,6 +210,9 @@ Renderer::Renderer(const std::string& shaderDirectory) {
 
 Renderer::~Renderer() {
     glDeleteTextures(12, productTextures_);
+    glDeleteTextures(1, &reflectionTexture_);
+    glDeleteRenderbuffers(1, &reflectionDepth_);
+    glDeleteFramebuffers(1, &reflectionFbo_);
     if (vbo_ != 0) {
         glDeleteBuffers(1, &vbo_);
     }
@@ -246,8 +256,10 @@ void Renderer::drawMesh(const glm::mat4& viewProjection, const glm::vec3& positi
                         const glm::vec3& scale, const glm::vec3& color, GLint first,
                         GLint count, float opacity, float emissive) {
     if (suppressGeometry_) return;
-    glUniform1i(glGetUniformLocation(program_, "uWireframe"), wireframe_);
-    glUniform1i(glGetUniformLocation(program_, "uUseTexture"), useTexture_);
+    glUniform1i(floorLocation_, floorMaterial_);
+    glUniform1i(reflectionPassLocation_, reflectionPass_);
+    glUniform1i(wireframeLocation_, wireframe_);
+    glUniform1i(textureEnabledLocation_, useTexture_);
     if (useTexture_) { glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, activeTexture_); }
     const glm::mat4 model = parentTransform_ * glm::translate(glm::mat4(1.0f), position) *
                             glm::scale(glm::mat4(1.0f), scale);
@@ -278,6 +290,7 @@ void Renderer::drawCylinder(const glm::mat4& viewProjection, const glm::vec3& po
 // Small geometry font: labels stay attached to the cabinet when orbiting.
 void Renderer::drawText(const glm::mat4& vp, const std::string& text,
                         glm::vec3 center, float height, glm::vec3 color) {
+    if (reflectionPass_) return;
     const float pixel = height / 7.0f;
     const float left = center.x - (static_cast<float>(text.size()) * 6.0f - 1.0f) * pixel * 0.5f;
     for (std::size_t i = 0; i < text.size(); ++i) {
@@ -401,6 +414,19 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     if (width <= 0 || height <= 0) {
         return;
     }
+    if (!reflectionPass_ && !options.wireframe) {
+        GLint previousFbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFbo);
+        ensureReflectionTarget(std::max(width / 2, 1), std::max(height / 2, 1));
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, productTextures_[0]);
+        glActiveTexture(GL_TEXTURE0);
+        glBindFramebuffer(GL_FRAMEBUFFER, reflectionFbo_);
+        reflectionPass_ = true;
+        render(machine, animation, camera, cash, payment, drink, options, reflectionWidth_, reflectionHeight_);
+        reflectionPass_ = false;
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFbo));
+    }
     wireframe_ = options.wireframe;
     glPolygonMode(GL_FRONT_AND_BACK, wireframe_ ? GL_LINE : GL_FILL);
     const bool cutaway = options.xray || (options.cinematic &&
@@ -410,16 +436,23 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     glClearColor(0.97f, 0.95f, 0.90f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    glm::mat4 reflection(1.0f);
+    if (reflectionPass_) { reflection[1][1] = -1; reflection[3][1] = -0.2f; }
     const glm::mat4 viewProjection =
         camera.projectionMatrix(static_cast<float>(width) / static_cast<float>(height)) *
-        camera.viewMatrix();
+        camera.viewMatrix() * reflection;
     glUseProgram(program_);
     glUniform1i(glGetUniformLocation(program_, "uLabelTexture"), 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, productTextures_[0]);
-    glUniform3f(lightLocation_, -3.5f, 8.0f, 5.0f);
+    glUniform1i(reflectionSamplerLocation_, 1);
+    glUniform2f(viewportLocation_, static_cast<float>(width), static_cast<float>(height));
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, reflectionPass_ || !reflectionTexture_ ? productTextures_[0] : reflectionTexture_);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform3f(lightLocation_, -9.0f, 14.0f, 8.0f);
     const auto eye = camera.position();
-    glUniform3fv(glGetUniformLocation(program_, "uCameraPosition"), 1, &eye[0]);
+    glUniform3fv(cameraLocation_, 1, &eye[0]);
     glBindVertexArray(vao_);
 
     const glm::vec3 mint{0.49f, 0.78f, 0.68f};
@@ -427,11 +460,19 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     const glm::vec3 cream{0.96f, 0.93f, 0.84f};
     const glm::vec3 deepMint{0.20f, 0.43f, 0.36f};
 
-    // Warm studio floor and a soft, flattened contact shadow.
-    drawBox(viewProjection, {0.0f, -0.16f, 0.0f}, {80.0f, 0.12f, 80.0f},
-            {0.94f, 0.91f, 0.84f});
-    drawCylinder(viewProjection, {0.08f, -0.085f, -0.06f}, {3.15f, 0.025f, 1.45f},
-                 {0.72f, 0.69f, 0.62f});
+    drawEnvironment(viewProjection);
+    // Layered contact shadows keep the cabinet grounded without a hard dark disk.
+    if (!reflectionPass_) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        for (int layer = 0; layer < 8; ++layer)
+            drawMesh(viewProjection, {0.10f, -0.097f + layer * 0.0001f, -0.05f},
+                     {5.2f - layer * 0.2f, 0.001f, 2.8f - layer * 0.14f},
+                     {0.23f, 0.28f, 0.25f}, cylinderFirst_, cylinderCount_, 0.024f);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
 
     suppressGeometry_ = cutaway;
     // Rounded-looking pastel shell, built from softly contrasting cabinet panels.
@@ -700,9 +741,11 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         drawProduct(viewProjection, drink.product(), glm::vec3(0), false, 1);
         parentTransform_ = glm::mat4(1);
     }
-    if (!camera.presentationActive() && !cash.active() && !animation.pressing()) drawHeldDrink(viewProjection, camera, drink);
-    drawPressHand(viewProjection, camera, animation);
-    drawCash(viewProjection, camera, cash);
+    if (!reflectionPass_ && !camera.presentationActive() && !cash.active() && !animation.pressing()) drawHeldDrink(viewProjection, camera, drink);
+    if (!reflectionPass_) {
+        drawPressHand(viewProjection, camera, animation);
+        drawCash(viewProjection, camera, cash);
+    }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glBindVertexArray(0);
     glUseProgram(0);
@@ -899,4 +942,118 @@ void Renderer::createProductTextures() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Renderer::ensureReflectionTarget(int width, int height) {
+    if (reflectionFbo_ && width == reflectionWidth_ && height == reflectionHeight_) return;
+    if (!reflectionFbo_) {
+        glGenFramebuffers(1, &reflectionFbo_);
+        glGenTextures(1, &reflectionTexture_);
+        glGenRenderbuffers(1, &reflectionDepth_);
+    }
+    reflectionWidth_ = width; reflectionHeight_ = height;
+    glBindTexture(GL_TEXTURE_2D, reflectionTexture_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindRenderbuffer(GL_RENDERBUFFER, reflectionDepth_);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+    glBindFramebuffer(GL_FRAMEBUFFER, reflectionFbo_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, reflectionTexture_, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, reflectionDepth_);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        throw std::runtime_error("Could not create floor reflection framebuffer");
+}
+
+void Renderer::drawEnvironment(const glm::mat4& vp) {
+    const glm::vec3 plaster{0.91f, 0.92f, 0.89f};
+    const glm::vec3 stone{0.78f, 0.81f, 0.78f};
+    const glm::vec3 metal{0.24f, 0.31f, 0.34f};
+    const glm::vec3 oak{0.63f, 0.44f, 0.27f};
+    if (!reflectionPass_) {
+        floorMaterial_ = true;
+        drawMesh(vp, {0, -0.16f, 10}, {38, 0.12f, 32}, {0.86f, 0.87f, 0.82f}, 0, 36);
+        floorMaterial_ = false;
+    }
+    // A bright university lobby: VKU blue/yellow accents, louvers and a glazed garden edge.
+    drawBox(vp, {0, 5.9f, -3.2f}, {8.2f, 12, 0.22f}, plaster);
+    drawBox(vp, {0, 0.16f, -3.04f}, {8.2f, 0.5f, 0.12f}, stone);
+    for (float x : {-18.8f, 18.8f}) drawBox(vp, {x, 5.8f, 10}, {0.24f, 12, 32}, plaster);
+    drawBox(vp, {0, 11.8f, 9.5f}, {38, 0.22f, 33}, {0.94f, 0.94f, 0.89f});
+    drawBox(vp, {0, 6.8f, -3.04f}, {6.4f, 0.045f, 0.10f}, {0.78f, 0.62f, 0.30f});
+    drawText(vp, "V", {-0.58f, 8.0f, -2.97f}, 0.92f, {0.88f, 0.28f, 0.19f});
+    drawText(vp, "K", {0, 8.0f, -2.97f}, 0.92f, {0.96f, 0.67f, 0.15f});
+    drawText(vp, "U", {0.58f, 8.0f, -2.97f}, 0.92f, {0.14f, 0.43f, 0.68f});
+    drawText(vp, "CAMPUS LOUNGE", {0, 7.05f, -2.97f}, 0.20f, metal);
+    drawBox(vp, {0, 10.7f, -3.0f}, {37.4f, 0.20f, 0.24f}, {0.92f, 0.70f, 0.24f});
+    drawBox(vp, {0, 10.16f, -3.02f}, {37.4f, 0.80f, 0.18f}, {0.21f, 0.47f, 0.66f});
+    drawText(vp, "VIETNAM - KOREA UNIVERSITY", {0, 10.14f, -2.90f}, 0.26f, {0.96f, 0.96f, 0.89f});
+    // Garden scenery seen through the large panes, kept well behind the active play area.
+    drawBox(vp, {0, 6.3f, -7.2f}, {38, 12, 0.08f}, {0.68f, 0.80f, 0.88f}, 0.18f);
+    drawBox(vp, {0, 0.4f, -5.8f}, {38, 0.5f, 3}, {0.56f, 0.67f, 0.40f});
+    for (float x : {-17.0f, -12.0f, -7.0f, 7.0f, 12.0f, 17.0f}) {
+        drawBox(vp, {x, 4.7f, -3.05f}, {0.14f, 9.4f, 0.20f}, metal);
+        drawBox(vp, {x, 9.5f, -3.05f}, {0.30f, 0.20f, 0.30f}, stone);
+    }
+    for (float x : {-10.7f, 10.7f}) {
+        for (float y : {0.18f, 3.2f, 9.4f}) drawBox(vp, {x, y, -3.05f}, {13.3f, 0.12f, 0.20f}, metal);
+        // Lower push handles identify full-height glass doors.
+        for (float dx : {-0.28f, 0.28f}) drawBox(vp, {x + dx, 2.5f, -2.86f}, {0.055f, 0.80f, 0.08f}, metal);
+        for (int slat = 0; slat < 6; ++slat)
+            drawBox(vp, {x, 8.25f + slat * 0.18f, -2.85f}, {13.1f, 0.045f, 0.16f}, stone);
+    }
+    // Ceiling beams and warm recessed strip lights establish depth without clutter.
+    for (float z : {1.5f, 8.0f, 15.0f, 22.0f}) {
+        drawBox(vp, {0, 11.55f, z}, {37, 0.14f, 0.24f}, stone);
+        drawBox(vp, {0, 11.45f, z}, {14, 0.025f, 0.10f}, {1.0f, 0.95f, 0.79f}, 0.45f);
+    }
+    const auto initial = parentTransform_;
+    auto plant = [&](glm::vec3 base, float scale, bool palm) {
+        parentTransform_ = glm::translate(glm::mat4(1), base) * glm::scale(glm::mat4(1), glm::vec3(scale));
+        const auto frame = parentTransform_;
+        drawCylinder(vp, {0, 0.50f, 0}, {1.1f, 1.1f, 1.1f}, {0.82f, 0.80f, 0.71f});
+        drawCylinder(vp, {0, 1.035f, 0}, {1.12f, 0.05f, 1.12f}, {0.66f, 0.64f, 0.52f});
+        drawCylinder(vp, {0, 1.07f, 0}, {0.99f, 0.015f, 0.99f}, {0.22f, 0.19f, 0.14f});
+        drawCylinder(vp, {0, palm ? 2.25f : 1.55f, 0}, {0.12f, palm ? 3.0f : 1.3f, 0.12f}, oak);
+        for (int leaf = 0; leaf < (palm ? 10 : 9); ++leaf) {
+            const float a = leaf * 2.39996f;
+            const float height = palm ? 3.6f : 1.7f + (leaf % 3) * 0.25f;
+            const auto crown = frame * glm::translate(glm::mat4(1), {0, height, 0}) *
+                glm::rotate(glm::mat4(1), a, glm::vec3(0, 1, 0));
+            for (int segment = 0; segment < 5; ++segment) {
+                const float t0 = segment / 5.0f, t1 = (segment + 1) / 5.0f;
+                auto point = [&](float t) {
+                    return glm::vec3((palm ? 1.65f : 0.90f) * t,
+                        0.48f * std::sin(t * glm::pi<float>()) - (palm ? 0.60f : 0.25f) * t * t, 0);
+                };
+                const auto start = point(t0), end = point(t1);
+                const auto direction = end - start;
+                const float mid = (t0 + t1) * 0.5f;
+                parentTransform_ = crown * glm::translate(glm::mat4(1), (start + end) * 0.5f) *
+                    glm::rotate(glm::mat4(1), std::atan2(-direction.x, direction.y), glm::vec3(0, 0, 1));
+                const float leafWidth = 0.04f + 0.22f * std::sin(mid * glm::pi<float>());
+                drawCylinder(vp, glm::vec3(0), {leafWidth, glm::length(direction) * 1.08f, 0.035f},
+                    leaf % 2 ? glm::vec3(0.20f, 0.39f, 0.23f) : glm::vec3(0.31f, 0.49f, 0.28f), true);
+            }
+        }
+        parentTransform_ = initial;
+    };
+    for (float x : {-16.5f, -8.0f, 8.0f, 16.5f}) plant({x, -0.09f, -1.5f}, 1.0f, true);
+    for (float x : {-16.2f, 16.2f}) plant({x, -0.09f, 13}, 1.1f, false);
+    // Slatted seating and slim legs sit in the distant side zones.
+    for (float x : {-12.0f, 12.0f}) {
+        for (int slat = 0; slat < 5; ++slat) {
+            drawBox(vp, {x, 1.08f, -1.2f + slat * 0.18f}, {4.7f, 0.12f, 0.13f}, oak);
+            drawBox(vp, {x, 1.48f + slat * 0.18f, -1.35f}, {4.7f, 0.12f, 0.14f}, oak);
+        }
+        for (float dx : {-1.7f, 1.7f}) drawBox(vp, {x + dx, 0.48f, -0.85f}, {0.13f, 1.1f, 0.7f}, metal);
+        drawBox(vp, {x, -0.06f, -0.85f}, {5.1f, 0.025f, 1.5f}, {0.77f, 0.78f, 0.72f});
+    }
+    // Transparent glazing, drawn after the opaque exterior scenery.
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE);
+    for (float x : {-10.7f, 10.7f})
+        drawMesh(vp, {x, 4.7f, -3.0f}, {13.2f, 9.2f, 0.025f}, {0.66f, 0.85f, 0.88f}, 0, 36, 0.11f);
+    glDepthMask(GL_TRUE); glDisable(GL_BLEND);
 }

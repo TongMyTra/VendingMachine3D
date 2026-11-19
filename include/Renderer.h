@@ -25,6 +25,15 @@ public:
 
 private:
     void createProductTextures();
+    void drawEnvironment(const glm::mat4& vp);
+    void ensureReflectionTarget(int width, int height);
+    GLuint reflectionFbo_{};
+    GLuint reflectionTexture_{};
+    GLuint reflectionDepth_{};
+    int reflectionWidth_{};
+    int reflectionHeight_{};
+    bool reflectionPass_{};
+    bool floorMaterial_{};
     GLuint productTextures_[12]{};
     bool useTexture_{};
     GLuint activeTexture_{};
@@ -37,6 +46,13 @@ private:
     GLuint program_{};
     GLuint vao_{};
     GLuint vbo_{};
+    GLint floorLocation_{};
+    GLint reflectionPassLocation_{};
+    GLint wireframeLocation_{};
+    GLint textureEnabledLocation_{};
+    GLint cameraLocation_{};
+    GLint reflectionSamplerLocation_{};
+    GLint viewportLocation_{};
     GLint mvpLocation_{};
     GLint modelLocation_{};
     GLint colorLocation_{};

@@ -47,6 +47,9 @@ int main(int argc, char** argv) {
             options.wireframe = mode == 1;
             options.xray = mode == 2;
             renderer.render(machine, animation, camera, cash, payment, drink, options, 1100, 1000);
+            GLint restoredFbo = 0;
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &restoredFbo);
+            if (static_cast<GLuint>(restoredFbo) != fbo) throw std::runtime_error("Reflection pass leaked its framebuffer");
             if (glGetError() != GL_NO_ERROR) throw std::runtime_error("OpenGL render error");
             GLint polygon[2]{}; glGetIntegerv(GL_POLYGON_MODE, polygon);
             if (polygon[0] != GL_FILL) throw std::runtime_error("Wireframe leaked into UI pass");
@@ -77,6 +80,22 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 120; ++i) camera.updatePresentation(0.01f, true, false, 0, {});
         renderer.render(machine, animation, camera, cash, payment, drink, options, 1100, 1000);
         if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Inspection/placement/external-camera render error");
+        // Resize the target to a desktop POV and exercise reflection-target reallocation.
+        glBindTexture(GL_TEXTURE_2D, color);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1600, 960, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glBindRenderbuffer(GL_RENDERBUFFER, depth);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 1600, 960);
+        Camera lobbyCamera;
+        renderer.render(machine, animation, lobbyCamera, cash, payment, drink, options, 1600, 960);
+        if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Reflection resize render error");
+        if (argc > 2) {
+            std::vector<unsigned char> pixels(1600 * 960 * 4);
+            glReadPixels(0, 0, 1600, 960, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            std::ofstream output(argv[2], std::ios::binary);
+            output << "P6\n1600 960\n255\n";
+            for (int y = 959; y >= 0; --y) for (int x = 0; x < 1600; ++x)
+                output.write(reinterpret_cast<const char*>(&pixels[(y * 1600 + x) * 4]), 3);
+        }
         glDeleteRenderbuffers(1, &depth); glDeleteTextures(1, &color); glDeleteFramebuffers(1, &fbo);
         std::cout << "Shaders, textures, solid/wireframe/X-Ray rendering and polygon-state restoration passed.\n";
     } catch (const std::exception& error) {

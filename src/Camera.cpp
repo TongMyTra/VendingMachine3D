@@ -13,6 +13,13 @@ glm::vec3 interactionPosition(float aspect) {
 }
 
 bool walkable(const glm::vec3& p) {
+    if (p.x < -18.2f || p.x > 18.2f || p.z < -2.5f || p.z > 25.0f) return false;
+    for (float x : {-12.0f, 12.0f})
+        if (std::abs(p.x - x) < 2.7f && p.z > -1.8f && p.z < 0.15f) return false;
+    for (float x : {-16.5f, -8.0f, 8.0f, 16.5f})
+        if (glm::length(glm::vec2(p.x - x, p.z + 1.5f)) < 0.95f) return false;
+    for (float x : {-16.2f, 16.2f})
+        if (glm::length(glm::vec2(p.x - x, p.z - 13.0f)) < 0.95f) return false;
     // Cabinet footprint expanded by the player's radius; axis-separated motion slides along it.
     if (p.x > 3.15f && p.x < 6.45f && p.z > -0.50f && p.z < 2.1f) return false;
     if (p.x > -5.8f && p.x < -4.0f && p.z > -0.5f && p.z < 1.3f) return false;

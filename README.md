@@ -157,3 +157,11 @@ Góc trên trái chỉ hiển thị **danh sách phím có thể dùng trong tr�
 Khi tương tác với máy: **1 / 2 / 3** chọn tờ 10.000đ / 20.000đ / 50.000đ; **E** đưa tiền vào khe khi ngắm đúng, nhận tiền hoàn hoặc nhận nước đã đến khay; **mũi tên trái/phải** chọn món, **chuột trái** nhấn keypad 3D, **Enter** xác nhận mua, **Esc** hủy/hoàn tiền và thoát. Khi cầm nước, quan sát, uống hoặc đến gần bàn/sọt, bảng tự thay các dòng hướng dẫn tương ứng.
 
 Camera điện ảnh mặc định tắt (V bật lại nếu cần). Góc tương tác chính diện đã tiến gần hơn nhưng vẫn căn để thấy trọn máy. Dung tích hiển thị bằng thanh ngang có số ml, giảm khi uống. Để bỏ vỏ, đứng gần và ngắm vào thân hoặc miệng sọt rồi nhấn E/Q; không cần ngắm đúng một điểm nhỏ. Máng trượt nằm phía trong mặt ốp dưới máy, nhìn rõ khi bật X-Ray.
+
+## Môi trường sảnh trường
+
+Cảnh nền được dựng trực tiếp bằng mesh OpenGL, lấy cảm hứng từ ảnh tham chiếu VKU: tường sáng, mảng xanh–vàng, lam ngang, kính lớn với khung kim loại và sân vườn phía ngoài. Ghế nan gỗ, chậu cây dạng cọ và đèn trần đặt xa khu vực thao tác. Người chơi vẫn quan sát ở độ cao mắt 1,65 m; tường, ghế và chậu cây có vùng va chạm.
+
+Sàn dùng họa tiết gạch procedural với đường ron, biến thiên màu nhỏ và điểm sáng bóng. Phản chiếu phẳng được render vào framebuffer ở nửa độ phân giải mỗi chiều, làm mờ nhẹ rồi trộn với sàn theo góc nhìn; đây là phản chiếu hình học thực trong cảnh, không phải ảnh nền. Các lớp bóng tiếp xúc gần máy giúp vật thể bám sàn. Ánh sáng hiện là mô phỏng dịu bằng ambient, diffuse và specular, chưa dùng GI hoặc shadow map toàn cảnh.
+
+Bài `RendererModes` cũng kiểm tra lượt phản chiếu khôi phục đúng framebuffer của ứng dụng và cấp lại kích thước khi đổi viewport. Chữ nhỏ không được vẽ trong lượt phản chiếu để giảm chi phí. Nhãn lon/chai và các thao tác mua nước giữ nguyên.
