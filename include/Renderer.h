@@ -26,6 +26,7 @@ public:
 private:
     void createProductTextures();
     void drawEnvironment(const glm::mat4& vp);
+    void drawCampusArchitecture(const glm::mat4& vp);
     void ensureReflectionTarget(int width, int height);
     GLuint reflectionFbo_{};
     GLuint reflectionTexture_{};
@@ -34,6 +35,9 @@ private:
     int reflectionHeight_{};
     bool reflectionPass_{};
     bool floorMaterial_{};
+    bool skyMaterial_{};
+    GLint skyLocation_{};
+    GLint campusFrameLocation_{};
     GLuint productTextures_[12]{};
     bool useTexture_{};
     GLuint activeTexture_{};
@@ -61,6 +65,8 @@ private:
     GLint emissiveLocation_{};
     GLint roundedFirst_{};
     GLint roundedCount_{};
+    GLint sphereFirst_{};
+    GLint sphereCount_{};
     GLint cylinderFirst_{};
     GLint cylinderCount_{};
     GLint frustumFirst_{};

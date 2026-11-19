@@ -6,6 +6,7 @@
 #include "Payment.h"
 #include "HeldDrink.h"
 #include "SceneOptions.h"
+#include "CampusLayout.h"
 #include <glm/gtc/quaternion.hpp>
 
 #include "VendingMachine.h"
@@ -137,6 +138,8 @@ Renderer::Renderer(const std::string& shaderDirectory) {
         throw std::runtime_error("Shader program link failed: " + log);
     }
 
+    campusFrameLocation_ = glGetUniformLocation(program_, "uCampusFrame");
+    skyLocation_ = glGetUniformLocation(program_, "uSky");
     floorLocation_ = glGetUniformLocation(program_, "uFloor");
     reflectionPassLocation_ = glGetUniformLocation(program_, "uReflectionPass");
     wireframeLocation_ = glGetUniformLocation(program_, "uWireframe");
@@ -183,6 +186,20 @@ Renderer::Renderer(const std::string& shaderDirectory) {
         }
     }
     roundedCount_ = static_cast<GLint>(vertices.size() / 6) - roundedFirst_;
+    sphereFirst_ = static_cast<GLint>(vertices.size() / 6);
+    for (int latitude = 0; latitude < 10; ++latitude) {
+        for (int longitude = 0; longitude < 16; ++longitude) {
+            for (int corner : triangleCorners) {
+                const int dx = corner == 1 || corner == 2;
+                const int dy = corner == 2 || corner == 3;
+                const float azimuth = (longitude + dx) * glm::two_pi<float>() / 16;
+                const float elevation = -glm::half_pi<float>() + (latitude + dy) * glm::pi<float>() / 10;
+                const glm::vec3 normal{std::cos(elevation) * std::cos(azimuth), std::sin(elevation), std::cos(elevation) * std::sin(azimuth)};
+                appendVertex(vertices, normal * 0.5f, normal);
+            }
+        }
+    }
+    sphereCount_ = static_cast<GLint>(vertices.size() / 6) - sphereFirst_;
     const auto cylinderRange = appendCylinder(vertices, 0.5f, 0.5f, 32);
     cylinderFirst_ = cylinderRange.first;
     cylinderCount_ = cylinderRange.second;
@@ -257,6 +274,7 @@ void Renderer::drawMesh(const glm::mat4& viewProjection, const glm::vec3& positi
                         GLint count, float opacity, float emissive) {
     if (suppressGeometry_) return;
     glUniform1i(floorLocation_, floorMaterial_);
+    glUniform1i(skyLocation_, skyMaterial_);
     glUniform1i(reflectionPassLocation_, reflectionPass_);
     glUniform1i(wireframeLocation_, wireframe_);
     glUniform1i(textureEnabledLocation_, useTexture_);
@@ -433,7 +451,7 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         (animation.active() || (camera.presentationActive() && !camera.external())));
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.97f, 0.95f, 0.90f, 1.0f);
+    glClearColor(0.73f, 0.85f, 0.94f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 reflection(1.0f);
@@ -442,6 +460,8 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         camera.projectionMatrix(static_cast<float>(width) / static_cast<float>(height)) *
         camera.viewMatrix() * reflection;
     glUseProgram(program_);
+    const auto campusFrame = CampusLayout::stationToCampus();
+    glUniformMatrix4fv(campusFrameLocation_, 1, GL_FALSE, &campusFrame[0][0]);
     glUniform1i(glGetUniformLocation(program_, "uLabelTexture"), 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, productTextures_[0]);
@@ -968,47 +988,23 @@ void Renderer::ensureReflectionTarget(int width, int height) {
 }
 
 void Renderer::drawEnvironment(const glm::mat4& vp) {
-    const glm::vec3 plaster{0.91f, 0.92f, 0.89f};
-    const glm::vec3 stone{0.78f, 0.81f, 0.78f};
-    const glm::vec3 metal{0.24f, 0.31f, 0.34f};
-    const glm::vec3 oak{0.63f, 0.44f, 0.27f};
+    const glm::vec3 stone{0.72f, 0.75f, 0.71f};
+    const glm::vec3 metal{0.23f, 0.30f, 0.30f};
+    const glm::vec3 oak{0.61f, 0.40f, 0.23f};
+    // A distant sky surrounds an open forecourt; there are no walls or ceiling around the machine.
+    skyMaterial_ = true;
+    glDepthFunc(GL_LEQUAL);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    drawMesh(vp, {0, 22, -5}, {160, 130, 160}, {0.73f, 0.85f, 0.94f}, 0, 36);
+    skyMaterial_ = false;
+    glDepthFunc(GL_LESS);
+    glPolygonMode(GL_FRONT_AND_BACK, wireframe_ ? GL_LINE : GL_FILL);
     if (!reflectionPass_) {
         floorMaterial_ = true;
-        drawMesh(vp, {0, -0.16f, 10}, {38, 0.12f, 32}, {0.86f, 0.87f, 0.82f}, 0, 36);
+        drawMesh(vp, {-3, -0.16f, 14}, {90, 0.12f, 80}, stone, 0, 36);
         floorMaterial_ = false;
     }
-    // A bright university lobby: VKU blue/yellow accents, louvers and a glazed garden edge.
-    drawBox(vp, {0, 5.9f, -3.2f}, {8.2f, 12, 0.22f}, plaster);
-    drawBox(vp, {0, 0.16f, -3.04f}, {8.2f, 0.5f, 0.12f}, stone);
-    for (float x : {-18.8f, 18.8f}) drawBox(vp, {x, 5.8f, 10}, {0.24f, 12, 32}, plaster);
-    drawBox(vp, {0, 11.8f, 9.5f}, {38, 0.22f, 33}, {0.94f, 0.94f, 0.89f});
-    drawBox(vp, {0, 6.8f, -3.04f}, {6.4f, 0.045f, 0.10f}, {0.78f, 0.62f, 0.30f});
-    drawText(vp, "V", {-0.58f, 8.0f, -2.97f}, 0.92f, {0.88f, 0.28f, 0.19f});
-    drawText(vp, "K", {0, 8.0f, -2.97f}, 0.92f, {0.96f, 0.67f, 0.15f});
-    drawText(vp, "U", {0.58f, 8.0f, -2.97f}, 0.92f, {0.14f, 0.43f, 0.68f});
-    drawText(vp, "CAMPUS LOUNGE", {0, 7.05f, -2.97f}, 0.20f, metal);
-    drawBox(vp, {0, 10.7f, -3.0f}, {37.4f, 0.20f, 0.24f}, {0.92f, 0.70f, 0.24f});
-    drawBox(vp, {0, 10.16f, -3.02f}, {37.4f, 0.80f, 0.18f}, {0.21f, 0.47f, 0.66f});
-    drawText(vp, "VIETNAM - KOREA UNIVERSITY", {0, 10.14f, -2.90f}, 0.26f, {0.96f, 0.96f, 0.89f});
-    // Garden scenery seen through the large panes, kept well behind the active play area.
-    drawBox(vp, {0, 6.3f, -7.2f}, {38, 12, 0.08f}, {0.68f, 0.80f, 0.88f}, 0.18f);
-    drawBox(vp, {0, 0.4f, -5.8f}, {38, 0.5f, 3}, {0.56f, 0.67f, 0.40f});
-    for (float x : {-17.0f, -12.0f, -7.0f, 7.0f, 12.0f, 17.0f}) {
-        drawBox(vp, {x, 4.7f, -3.05f}, {0.14f, 9.4f, 0.20f}, metal);
-        drawBox(vp, {x, 9.5f, -3.05f}, {0.30f, 0.20f, 0.30f}, stone);
-    }
-    for (float x : {-10.7f, 10.7f}) {
-        for (float y : {0.18f, 3.2f, 9.4f}) drawBox(vp, {x, y, -3.05f}, {13.3f, 0.12f, 0.20f}, metal);
-        // Lower push handles identify full-height glass doors.
-        for (float dx : {-0.28f, 0.28f}) drawBox(vp, {x + dx, 2.5f, -2.86f}, {0.055f, 0.80f, 0.08f}, metal);
-        for (int slat = 0; slat < 6; ++slat)
-            drawBox(vp, {x, 8.25f + slat * 0.18f, -2.85f}, {13.1f, 0.045f, 0.16f}, stone);
-    }
-    // Ceiling beams and warm recessed strip lights establish depth without clutter.
-    for (float z : {1.5f, 8.0f, 15.0f, 22.0f}) {
-        drawBox(vp, {0, 11.55f, z}, {37, 0.14f, 0.24f}, stone);
-        drawBox(vp, {0, 11.45f, z}, {14, 0.025f, 0.10f}, {1.0f, 0.95f, 0.79f}, 0.45f);
-    }
+    drawCampusArchitecture(vp);
     const auto initial = parentTransform_;
     auto plant = [&](glm::vec3 base, float scale, bool palm) {
         parentTransform_ = glm::translate(glm::mat4(1), base) * glm::scale(glm::mat4(1), glm::vec3(scale));
@@ -1040,20 +1036,71 @@ void Renderer::drawEnvironment(const glm::mat4& vp) {
         }
         parentTransform_ = initial;
     };
-    for (float x : {-16.5f, -8.0f, 8.0f, 16.5f}) plant({x, -0.09f, -1.5f}, 1.0f, true);
-    for (float x : {-16.2f, 16.2f}) plant({x, -0.09f, 13}, 1.1f, false);
-    // Slatted seating and slim legs sit in the distant side zones.
-    for (float x : {-12.0f, 12.0f}) {
+    // Exactly two trees bracket the left-side row of amenities.
+    for (float x : {-13.0f, 13.0f}) plant({x, -0.09f, -0.2f}, 1.0f, true);
+    // Wood-and-metal outdoor benches sit either side of the circulation space.
+    for (float x : {-9.0f, 9.0f}) {
         for (int slat = 0; slat < 5; ++slat) {
-            drawBox(vp, {x, 1.08f, -1.2f + slat * 0.18f}, {4.7f, 0.12f, 0.13f}, oak);
-            drawBox(vp, {x, 1.48f + slat * 0.18f, -1.35f}, {4.7f, 0.12f, 0.14f}, oak);
+            drawBox(vp, {x, 1.08f, -0.35f + slat * 0.18f}, {4.7f, 0.12f, 0.13f}, oak);
+            drawBox(vp, {x, 1.48f + slat * 0.18f, -0.50f}, {4.7f, 0.12f, 0.14f}, oak);
         }
-        for (float dx : {-1.7f, 1.7f}) drawBox(vp, {x + dx, 0.48f, -0.85f}, {0.13f, 1.1f, 0.7f}, metal);
-        drawBox(vp, {x, -0.06f, -0.85f}, {5.1f, 0.025f, 1.5f}, {0.77f, 0.78f, 0.72f});
+        for (float dx : {-1.7f, 1.7f}) drawBox(vp, {x + dx, 0.48f, 0.0f}, {0.13f, 1.1f, 0.7f}, metal);
     }
-    // Transparent glazing, drawn after the opaque exterior scenery.
-    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE);
-    for (float x : {-10.7f, 10.7f})
-        drawMesh(vp, {x, 4.7f, -3.0f}, {13.2f, 9.2f, 0.025f}, {0.66f, 0.85f, 0.88f}, 0, 36, 0.11f);
-    glDepthMask(GL_TRUE); glDisable(GL_BLEND);
+    parentTransform_ = initial;
+}
+
+void Renderer::drawCampusArchitecture(const glm::mat4& vp) {
+    const auto previous = parentTransform_;
+    parentTransform_ = CampusLayout::campusToStation();
+    auto box = [&](glm::vec3 position, glm::vec3 size, glm::vec3 color) {
+        drawMesh(vp, position, size, color, 0, 36);
+    };
+    const glm::vec3 wall{0.87f, 0.89f, 0.85f};
+    const glm::vec3 frame{0.43f, 0.56f, 0.59f};
+    const glm::vec3 glass{0.22f, 0.47f, 0.64f};
+    const glm::vec3 stone{0.56f, 0.64f, 0.61f};
+    // The school stands behind the courtyard. The vending area is completely outside its canopy.
+    for (float x : {-16.0f, 16.0f}) {
+        box({x, 8.4f, -27.0f}, {18.2f, 17.0f, 3.8f}, wall);
+        box({x, 16.9f, -27.0f}, {18.7f, 0.17f, 4.1f}, {0.77f, 0.37f, 0.34f});
+        // Panel joints and staggered blue windows echo the reference building.
+        for (int column = 0; column < 6; ++column) {
+            const float px = x - 7.5f + column * 3.0f;
+            box({px, 8.5f, -25.07f}, {0.035f, 16.6f, 0.025f}, {0.72f, 0.77f, 0.75f});
+            for (int floor = 0; floor < 3; ++floor) {
+                const float y = 2.9f + floor * 5.0f;
+                box({px + 1.2f, y, -24.99f}, {1.45f, 2.25f, 0.08f}, frame);
+                box({px + 1.2f, y, -24.93f}, {1.25f, 2.04f, 0.035f}, glass);
+                box({px + 1.2f, y, -24.89f}, {0.035f, 2.04f, 0.02f}, {0.74f, 0.83f, 0.82f});
+            }
+        }
+        for (float y : {0.8f, 5.8f, 10.8f, 15.8f})
+            box({x, y, -25.04f}, {18.1f, 0.04f, 0.025f}, {0.72f, 0.77f, 0.75f});
+    }
+    box({0, 10.1f, -28}, {14, 20.4f, 3.2f}, frame);
+    box({0, 15.2f, -26.30f}, {13.5f, 8.9f, 0.12f}, glass);
+    box({0, 20.5f, -27.7f}, {14.3f, 0.23f, 3.8f}, {0.92f, 0.75f, 0.36f});
+    for (int column = 0; column < 6; ++column)
+        box({-6.6f + column * 2.65f, 15.2f, -26.19f}, {0.065f, 8.8f, 0.05f}, {0.65f, 0.78f, 0.80f});
+    for (float y : {12.0f, 14.8f, 17.6f, 19.5f})
+        box({0, y, -26.19f}, {13.5f, 0.065f, 0.05f}, {0.65f, 0.78f, 0.80f});
+    drawText(vp, "V", {-1.2f, 14.9f, -26.03f}, 1.65f, {0.90f, 0.25f, 0.19f});
+    drawText(vp, "K", {0, 14.9f, -26.03f}, 1.65f, {0.98f, 0.72f, 0.16f});
+    drawText(vp, "U", {1.2f, 14.9f, -26.03f}, 1.65f, {0.25f, 0.30f, 0.66f});
+    // Entrance glass, columns and shaded vestibule exist only at the building itself.
+    box({0, 4.2f, -26.20f}, {12.5f, 7.7f, 0.10f}, {0.20f, 0.32f, 0.37f});
+    for (float x : {-5.8f, -2.1f, 2.1f, 5.8f})
+        box({x, 4.1f, -26.05f}, {0.10f, 7.4f, 0.09f}, {0.65f, 0.74f, 0.74f});
+    box({0, 4.6f, -26.04f}, {12.4f, 0.09f, 0.09f}, {0.65f, 0.74f, 0.74f});
+    box({0, 8.5f, -23.5f}, {18.5f, 0.38f, 6}, wall);
+    for (float x : {-7.3f, 7.3f}) box({x, 4.2f, -21.5f}, {0.42f, 8.5f, 0.42f}, frame);
+    box({0, 9.5f, -20.43f}, {18.6f, 1.8f, 0.18f}, {0.95f, 0.94f, 0.84f});
+    drawText(vp, "VIETNAM - KOREA UNIVERSITY", {0, 9.85f, -20.30f}, 0.40f, {0.61f, 0.25f, 0.23f});
+    drawText(vp, "NHAN BAN - PHUNG SU - KHAI PHONG", {0, 9.17f, -20.30f}, 0.29f, {0.39f, 0.40f, 0.31f});
+    for (int step = 0; step < 6; ++step) {
+        const float top = -0.10f + (step + 1) * 0.22f;
+        box({0, (top - 0.10f) * 0.5f, -18.7f - step * 0.65f}, {14.5f, top + 0.10f, 0.67f}, stone);
+        box({0, top + 0.01f, -18.7f - step * 0.65f}, {14.6f, 0.03f, 0.67f}, {0.72f, 0.77f, 0.71f});
+    }
+    parentTransform_ = previous;
 }

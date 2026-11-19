@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include "CampusLayout.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -13,19 +14,26 @@ glm::vec3 interactionPosition(float aspect) {
 }
 
 bool walkable(const glm::vec3& p) {
-    if (p.x < -18.2f || p.x > 18.2f || p.z < -2.5f || p.z > 25.0f) return false;
-    for (float x : {-12.0f, 12.0f})
-        if (std::abs(p.x - x) < 2.7f && p.z > -1.8f && p.z < 0.15f) return false;
-    for (float x : {-16.5f, -8.0f, 8.0f, 16.5f})
-        if (glm::length(glm::vec2(p.x - x, p.z + 1.5f)) < 0.95f) return false;
-    for (float x : {-16.2f, 16.2f})
-        if (glm::length(glm::vec2(p.x - x, p.z - 13.0f)) < 0.95f) return false;
+    const auto campus = CampusLayout::toCampus(p);
+    if (campus.x < -24 || campus.x > 24 || campus.z < -18 || campus.z > 25) return false;
+    for (float x : {-9.0f, 9.0f})
+        if (std::abs(p.x - x) < 2.7f && p.z > -0.95f && p.z < 1.0f) return false;
+    for (float x : {-13.0f, 13.0f})
+        if (glm::length(glm::vec2(p.x - x, p.z + 0.2f)) < 0.95f) return false;
     // Cabinet footprint expanded by the player's radius; axis-separated motion slides along it.
     if (p.x > 3.15f && p.x < 6.45f && p.z > -0.50f && p.z < 2.1f) return false;
     if (p.x > -5.8f && p.x < -4.0f && p.z > -0.5f && p.z < 1.3f) return false;
     return !(p.x > -2.65f && p.x < 2.65f && p.z > -1.10f && p.z < 1.35f);
 }
 float smooth(float t) { return t * t * (3.0f - 2.0f * t); }
+}
+
+Camera::Camera(bool campusOverview) : campusOverview_(campusOverview) {
+    if (campusOverview) {
+        feetPosition_ = {-3.0f, eyeHeight, 27.0f};
+        yaw_ = -67.0f;
+        pitch_ = 5.0f;
+    }
 }
 
 glm::vec3 Camera::forwardDirection() const {
@@ -46,7 +54,7 @@ glm::mat4 Camera::viewMatrix() const {
 }
 
 glm::mat4 Camera::projectionMatrix(float aspect) const {
-    return glm::perspective(glm::radians(60.0f), std::max(aspect, 0.01f), 0.08f, 100.0f);
+    return glm::perspective(glm::radians(campusOverview_ ? 66.0f : 60.0f), std::max(aspect, 0.01f), 0.08f, 100.0f);
 }
 
 void Camera::look(float deltaX, float deltaY) {
@@ -130,10 +138,10 @@ void Camera::update(float deltaTime, float forward, float strafe, bool sprint) {
     if (glm::length(direction) > 0.001f) {
         direction = glm::normalize(direction) * (sprint ? 7.0f : 3.5f) * dt;
         glm::vec3 next = feetPosition_;
-        next.x = std::clamp(next.x + direction.x, -25.0f, 25.0f);
+        next.x += direction.x;
         if (walkable(next)) feetPosition_.x = next.x;
         next = feetPosition_;
-        next.z = std::clamp(next.z + direction.z, -25.0f, 25.0f);
+        next.z += direction.z;
         if (walkable(next)) feetPosition_.z = next.z;
     }
     const float travelled = glm::length(feetPosition_ - before);
@@ -164,8 +172,8 @@ void Camera::updatePresentation(float dt, bool cinematic, bool vending, float pr
         eye = product + (closeup ? glm::vec3(0.60f, 0.45f, 1.65f) : glm::vec3(1.7f, 0.9f, 2.7f));
         target = product + glm::vec3(0, closeup ? -0.1f : 0, -0.08f);
     } else if (external_) {
-        eye = {7.0f, 5.4f, 10.5f};
-        target = {0, 2.65f, 0};
+        eye = campusOverview_ ? glm::vec3(-4.0f, 9.0f, 28.0f) : glm::vec3(7.0f, 5.4f, 10.5f);
+        target = campusOverview_ ? glm::vec3(6.0f, 3.2f, 7.0f) : glm::vec3(0, 2.65f, 0);
     }
     const float t = 1 - std::exp(-7.0f * std::max(dt, 0.0f));
     presentationEye_ = glm::mix(presentationEye_, eye, t);

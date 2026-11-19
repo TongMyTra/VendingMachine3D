@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1600, 960, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glBindRenderbuffer(GL_RENDERBUFFER, depth);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 1600, 960);
-        Camera lobbyCamera;
+        Camera lobbyCamera(true);
         renderer.render(machine, animation, lobbyCamera, cash, payment, drink, options, 1600, 960);
         if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Reflection resize render error");
         if (argc > 2) {

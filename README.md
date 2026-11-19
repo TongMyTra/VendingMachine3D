@@ -158,10 +158,20 @@ Khi tương tác với máy: **1 / 2 / 3** chọn tờ 10.000đ / 20.000đ / 50.
 
 Camera điện ảnh mặc định tắt (V bật lại nếu cần). Góc tương tác chính diện đã tiến gần hơn nhưng vẫn căn để thấy trọn máy. Dung tích hiển thị bằng thanh ngang có số ml, giảm khi uống. Để bỏ vỏ, đứng gần và ngắm vào thân hoặc miệng sọt rồi nhấn E/Q; không cần ngắm đúng một điểm nhỏ. Máng trượt nằm phía trong mặt ốp dưới máy, nhìn rõ khi bật X-Ray.
 
-## Môi trường sảnh trường
+## Môi trường sân trường ngoài trời
 
-Cảnh nền được dựng trực tiếp bằng mesh OpenGL, lấy cảm hứng từ ảnh tham chiếu VKU: tường sáng, mảng xanh–vàng, lam ngang, kính lớn với khung kim loại và sân vườn phía ngoài. Ghế nan gỗ, chậu cây dạng cọ và đèn trần đặt xa khu vực thao tác. Người chơi vẫn quan sát ở độ cao mắt 1,65 m; tường, ghế và chậu cây có vùng va chạm.
+Máy đặt trên sân thoáng phía trước tòa nhà VKU, cách mái sảnh và cửa kính của tòa nhà một khoảng rõ ràng. Không có trần, tường hay vách kính bao quanh khu vực máy. Mặt tiền tham khảo ảnh mới: hai cánh nhà sáng màu, dãy cửa sổ xanh, khối kính trung tâm với logo VKU, biển trường, mái đón có cột và bậc dẫn vào cửa.
 
-Sàn dùng họa tiết gạch procedural với đường ron, biến thiên màu nhỏ và điểm sáng bóng. Phản chiếu phẳng được render vào framebuffer ở nửa độ phân giải mỗi chiều, làm mờ nhẹ rồi trộn với sàn theo góc nhìn; đây là phản chiếu hình học thực trong cảnh, không phải ảnh nền. Các lớp bóng tiếp xúc gần máy giúp vật thể bám sàn. Ánh sáng hiện là mô phỏng dịu bằng ambient, diffuse và specular, chưa dùng GI hoặc shadow map toàn cảnh.
+Sân gồm nền lát đá và lối gạch đỏ phía trước, độ phản chiếu nhẹ hơn nền trong nhà. Bầu trời có gradient và mây procedural. Hai bên có ghế gỗ–kim loại, cây cọ, cây bóng mát và bồn cây thấp; lối đi và mặt trước máy được giữ thoáng. Bàn, sọt tái chế cùng toàn bộ thao tác mua nước giữ nguyên. Camera có thể đi quanh sân, có va chạm với ghế, cây, bồn cây và dừng trước bậc vào tòa nhà.
 
-Bài `RendererModes` cũng kiểm tra lượt phản chiếu khôi phục đúng framebuffer của ứng dụng và cấp lại kích thước khi đổi viewport. Chữ nhỏ không được vẽ trong lượt phản chiếu để giảm chi phí. Nhãn lon/chai và các thao tác mua nước giữ nguyên.
+Phản chiếu phẳng dùng framebuffer ở nửa độ phân giải mỗi chiều, làm mờ nhẹ và trộn với vật liệu sân. `RendererModes` kiểm tra shader, ba chế độ hiển thị, khôi phục framebuffer và đổi kích thước. `CameraControls` kiểm tra không còn tường trong nhà cũ và vùng va chạm của ghế ngoài sân. Kiến trúc là mô hình procedural lấy cảm hứng từ ảnh, không phải bản sao khảo sát chính xác.
+
+Ảnh render xem trước mới: `output/previews/vku-outdoor-preview.png`. Các ảnh lobby/campus cũ chỉ là bản xem trước của bố cục trước đó.
+
+### Cụm tiện ích bên trái, vuông góc mặt tiền
+
+Cảnh hiện có đúng **2 ghế, 2 cây**, cùng máy bán nước, bàn và sọt, xếp thành hàng ở mé trái sân (trục campus x ≈ -14). Cả cụm xoay 90° so với mặt tiền VKU và quay vào giữa sân; phía trước lối vào tòa nhà được để trống. Các cây và ghế rải rác của bố cục cũ được gom vào cụm này.
+
+`CampusLayout.h` định nghĩa phép đổi giữa hệ tọa độ khu máy và hệ tọa độ sân trường. Nhờ đó, camera nạp tiền, ray casting keypad, hoạt ảnh nhả hàng, bàn và sọt vẫn dùng cùng hệ tọa độ với máy, còn tòa nhà và vật liệu sân được đổi sang hướng mới. Va chạm ghế/cây và góc nhìn ban đầu được cập nhật theo cụm. `CameraControls` kiểm tra cả bảy vật thể đều ở bên trái và mặt máy vuông góc mặt tiền.
+
+Ảnh bố cục mới: `output/previews/vku-left-layout-preview.png`.

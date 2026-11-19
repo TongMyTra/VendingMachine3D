@@ -387,7 +387,7 @@ int main() {
         VendingMachine machine;
         Payment payment;
         Animation animation;
-        Camera camera;
+        Camera camera(true);
         Interaction interaction(machine, payment, animation);
         CashInteraction cash;
         HeldDrink drink;

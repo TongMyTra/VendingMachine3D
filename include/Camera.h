@@ -5,6 +5,7 @@
 
 class Camera {
 public:
+    explicit Camera(bool campusOverview = false);
     // The existing cabinet is 5.44 units tall: one world unit is 0.4 metres.
     static constexpr float metresPerUnit = 0.4f;
     static constexpr float eyeHeight = 1.65f / metresPerUnit - 0.10f;
@@ -33,6 +34,7 @@ public:
     float interactionBlend() const;
 
 private:
+    bool campusOverview_{};
     bool external_{};
     bool presentationActive_{};
     glm::vec3 presentationEye_{};

@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include "CampusLayout.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -108,5 +109,23 @@ int main() {
     assert(trash.canUseTrash());
     trash.look(1800, 0);
     assert(!trash.canUseTrash());
+    Camera courtyard;
+    step(courtyard, 100, 0, -1); // Go around the cabinet, into the open forecourt.
+    step(courtyard, 600, 1);
+    assert(courtyard.position().z < -8.0f); // Former indoor wall must be gone.
+    step(courtyard, 400, 1);
+    assert(CampusLayout::toCampus(courtyard.position()).x >= -24.0f); // Stop before the building steps.
+    Camera bench;
+    step(bench, 286, 0, -1);
+    step(bench, 600, 1);
+    assert(bench.position().z >= 1.0f && bench.position().z < 1.2f);
+    for (glm::vec3 point : {glm::vec3(0, 0, 0), glm::vec3(4.8f, 0, 0.8f), glm::vec3(-4.9f, 0, 0.4f),
+            glm::vec3(-9, 0, 0), glm::vec3(9, 0, 0), glm::vec3(-13, 0, -0.2f), glm::vec3(13, 0, -0.2f)}) {
+        const auto world = CampusLayout::toCampus(point);
+        assert(world.x < -12.0f); // All seven objects are on the campus's left side.
+        assert(glm::length(glm::vec3(CampusLayout::campusToStation() * glm::vec4(world, 1)) - point) < 0.001f);
+    }
+    const auto stationFacing = glm::vec3(CampusLayout::stationToCampus() * glm::vec4(0, 0, 1, 0));
+    assert(std::abs(glm::dot(stationFacing, glm::vec3(0, 0, 1))) < 0.001f);
     std::cout << "Camera movement, sprint, collision, interaction and transition checks passed.\n";
 }
