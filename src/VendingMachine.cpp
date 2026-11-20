@@ -36,6 +36,10 @@ glm::vec3 VendingMachine::productPosition(int index) const {
 }
 
 bool VendingMachine::vendSelected(Payment& payment, Animation& animation) {
+    if (serviceDoorOpen_) {
+        status_ = "Máy đang được bảo trì. Vui lòng chờ.";
+        return false;
+    }
     if (animation.active() || animation.pressing()) {
         status_ = "Máy đang nhả hàng. Vui lòng chờ.";
         return false;
@@ -68,6 +72,14 @@ bool VendingMachine::vendSelected(Payment& payment, Animation& animation) {
     --product->stock;
     animation.start(selectedIndex_);
     status_ = "Đang đưa sản phẩm xuống khay nhận...";
+    return true;
+}
+
+bool VendingMachine::addStock(int index) {
+    if (index < 0 || index >= static_cast<int>(products_.size())) return false;
+    Product& product = products_[static_cast<std::size_t>(index)];
+    if (product.stock >= productSlotCapacity) return false;
+    ++product.stock;
     return true;
 }
 

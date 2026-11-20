@@ -3,6 +3,7 @@
 #include "CashInteraction.h"
 #include "HeldDrink.h"
 #include "SceneOptions.h"
+#include "StaffMode.h"
 #include "Sound.h"
 #include "Interaction.h"
 #include "Payment.h"
@@ -36,6 +37,7 @@ struct AppState {
     HeldDrink* drink{};
     SceneOptions* options{};
     VendingMachine* machine{};
+    StaffMode* staff{};
     bool exitRequested{};
     bool mouseCaptured{true};
     float viewportRatio{1.0f};
@@ -60,6 +62,12 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     AppState* state = appState(window);
     if (!state || button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
     if (state->drink->inspecting() || state->camera->presentationActive()) return;
+    if (state->staff->active()) {
+        if (!ImGui::GetIO().WantCaptureMouse && !state->staff->cratePlacing() &&
+            !state->staff->doorBusy() && !state->staff->transferActive())
+            state->staff->placeHeldItem(*state->camera, *state->machine);
+        return;
+    }
     if (!state->camera->interacting()) {
         if (!state->mouseCaptured && !ImGui::GetIO().WantCaptureMouse)
             captureMouse(window, *state, true);
@@ -123,7 +131,7 @@ void performAction(GLFWwindow* window, int key) {
     if (key == GLFW_KEY_X) { state->options->xray = !state->options->xray; return; }
     if (key == GLFW_KEY_Z) { state->options->wireframe = !state->options->wireframe; return; }
     if (key == GLFW_KEY_V) { state->options->cinematic = !state->options->cinematic; return; }
-    if (key == GLFW_KEY_C && !state->cash->active() && !state->animation->active() && !state->drink->opening()) {
+    if (key == GLFW_KEY_C && !state->staff->active() && !state->cash->active() && !state->animation->active() && !state->drink->opening()) {
         if (state->drink->inspecting()) state->drink->toggleInspect();
         state->camera->toggleExternal();
         captureMouse(window, *state, !state->camera->external());
@@ -131,6 +139,20 @@ void performAction(GLFWwindow* window, int key) {
     }
     if (key == GLFW_KEY_R && !state->cash->active() && !state->camera->presentationActive() && !state->camera->interacting()) {
         if (state->drink->toggleInspect()) captureMouse(window, *state, !state->drink->inspecting());
+        return;
+    }
+    if (key == GLFW_KEY_F && !state->drink->inspecting()) {
+        const bool busy = state->cash->active() || state->animation->active() || state->animation->pressing() ||
+                          state->drink->opening() || state->drink->pickingUp() || state->camera->transitioning();
+        if (!state->staff->active() && state->drink->holding()) {
+            if (!busy) state->drink->open();
+            return;
+        }
+        if (state->staff->switchRole(state->drink->hasProduct(), busy, *state->machine)) {
+            if (state->camera->interacting()) state->camera->endInteraction();
+            if (state->camera->external()) state->camera->toggleExternal();
+            captureMouse(window, *state, true);
+        }
         return;
     }
     if (key == GLFW_KEY_ESCAPE && state->drink->inspecting()) {
@@ -147,6 +169,21 @@ void performAction(GLFWwindow* window, int key) {
         } else {
             captureMouse(window, *state, false);
         }
+        return;
+    }
+
+    if (state->staff->active()) {
+        if (key == GLFW_KEY_TAB) { state->staff->toggleInventory(); return; }
+        if (key == GLFW_KEY_LEFT) { state->staff->selectSupply(-1, *state->machine); return; }
+        if (key == GLFW_KEY_RIGHT) { state->staff->selectSupply(1, *state->machine); return; }
+        if (key == GLFW_KEY_E) { state->staff->handleInteract(*state->camera); return; }
+        if (key == GLFW_KEY_B) { state->staff->openSupplyCrate(*state->camera); return; }
+        if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+            state->staff->takeSelectedSupply(*state->machine);
+            return;
+        }
+        if (key == GLFW_KEY_O) { state->staff->openDoor(); return; }
+        if (key == GLFW_KEY_L) { state->staff->lockDoor(); return; }
         return;
     }
 
@@ -253,7 +290,35 @@ void drawContextHints(const AppState& state) {
         ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings);
     ImGui::TextColored(ImVec4(0.18f, 0.46f, 0.35f, 1), "MINT FRESH");
     ImGui::Separator();
-    if (camera.presentationActive()) {
+    if (state.staff->active()) {
+        ImGui::TextColored(ImVec4(0.48f, 0.30f, 0.17f, 1), "STAFF MODE");
+        if (state.staff->cratePlacing()) {
+            ImGui::TextUnformatted("Đang đặt thùng xuống nhẹ nhàng...");
+        } else if (state.staff->crateCarried()) {
+            ImGui::TextUnformatted("[E] Đặt thùng bên phải máy");
+        } else if (!state.staff->crateOpen()) {
+            ImGui::TextUnformatted("[B] Mở thùng (nhìn vào thùng)");
+        } else if (state.staff->heldProduct() < 0) {
+            const int index = state.staff->selectedSupply();
+            const auto& item = state.machine->products()[static_cast<std::size_t>(index)];
+            ImGui::TextUnformatted("[← / →] Chọn chai  [Enter] Cầm  [B] Đóng thùng");
+            ImGui::Text("%s | Kho còn: %d", item.name.c_str(), state.staff->reserve(index));
+        } else {
+            const int slot = state.staff->hoveredSlot();
+            ImGui::TextUnformatted("[Chuột trái] Đặt chai vào ô đang ngắm  [L] Trả chai và khóa");
+            if (slot >= 0) {
+                const auto& item = state.machine->products()[static_cast<std::size_t>(slot)];
+                ImGui::Text("%s — %s — %d/%d", productCode(slot).c_str(), item.name.c_str(), item.stock, productSlotCapacity);
+            } else ImGui::TextUnformatted("Nhìn vào ô kệ còn chỗ để xem trước vị trí đặt.");
+        }
+        if (state.staff->fullStockActive())
+            ImGui::Text("Đã thêm %d chai — có thể dừng bất cứ lúc nào", state.staff->fullStockAdded());
+        if (state.staff->doorBusy()) ImGui::TextUnformatted("Cửa đang chuyển động...");
+        else if (!state.staff->doorOpen()) ImGui::TextUnformatted("[O] Mở cửa máy");
+        else ImGui::TextUnformatted("[L] Đóng và khóa cửa (không cần ngắm)");
+        ImGui::TextUnformatted("[F] Customer Mode khi cửa đã khóa");
+        ImGui::TextWrapped("%s", state.staff->status().c_str());
+    } else if (camera.presentationActive()) {
         ImGui::TextUnformatted(camera.external() ? "[C] Trở lại POV" : "Đang theo dõi sản phẩm...");
     } else if (drink.inspecting()) {
         ImGui::TextUnformatted("[Kéo chuột trái] Xoay sản phẩm");
@@ -296,6 +361,22 @@ void drawContextHints(const AppState& state) {
             else if (!drink.empty()) ImGui::TextUnformatted("[Giữ chuột trái / E] Uống");
         }
     }
+    if (state.staff->inventoryVisible()) {
+        ImGui::SetNextWindowPos(ImVec2(350, 20), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.95f);
+        ImGui::Begin("Tồn kho máy", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::TextColored(ImVec4(0.18f, 0.46f, 0.35f, 1), "TỒN KHO  |  12 Ô × 6 SẢN PHẨM");
+        ImGui::Separator();
+        for (int i = 0; i < static_cast<int>(state.machine->products().size()); ++i) {
+            const auto& item = state.machine->products()[static_cast<std::size_t>(i)];
+            const ImVec4 color = item.stock == productSlotCapacity ? ImVec4(0.16f, 0.52f, 0.32f, 1) :
+                item.stock == 0 ? ImVec4(0.76f, 0.25f, 0.22f, 1) : ImVec4(0.76f, 0.55f, 0.16f, 1);
+            ImGui::TextColored(color, "%s  %-16s  %d/%d  | Kho: %d", productCode(i).c_str(), item.name.c_str(),
+                item.stock, productSlotCapacity, state.staff->reserve(i));
+        }
+        ImGui::End();
+    }
     if (drink.hasProduct()) {
         ImGui::Separator();
         ImGui::TextUnformatted(drink.product().name.c_str());
@@ -303,7 +384,7 @@ void drawContextHints(const AppState& state) {
         std::snprintf(volume, sizeof(volume), "%.0f / %.0f ml", drink.remaining(), drink.capacity());
         ImGui::ProgressBar(drink.remaining() / drink.capacity(), ImVec2(265, 22), volume);
     }
-    if (!cash.active() && !animation.active() && !drink.opening()) ImGui::TextUnformatted("[C] Camera ngoài / POV");
+    if (!state.staff->active() && !cash.active() && !animation.active() && !drink.opening()) ImGui::TextUnformatted("[C] Camera ngoài / POV");
     ImGui::Separator();
     ImGui::TextUnformatted("[Z] Solid / Wireframe  [X] X-Ray");
     ImGui::TextUnformatted("[V] Bật / tắt camera điện ảnh");
@@ -381,6 +462,7 @@ int main() {
         Interaction interaction(machine, payment, animation);
         CashInteraction cash;
         HeldDrink drink;
+        StaffMode staff;
         SceneOptions options;
         Sound sound;
         AppState state;
@@ -392,6 +474,7 @@ int main() {
         state.drink = &drink;
         state.options = &options;
         state.machine = &machine;
+        state.staff = &staff;
         glfwSetWindowUserPointer(window, &state);
         glfwSetMouseButtonCallback(window, mouseButtonCallback);
         glfwSetCursorPosCallback(window, cursorPositionCallback);
@@ -407,6 +490,9 @@ int main() {
             const double currentTime = glfwGetTime();
             const float deltaTime = std::clamp(static_cast<float>(currentTime - previousTime), 0.0f, 0.25f);
             renderer.update(deltaTime);
+            staff.update(deltaTime, machine);
+            if (const int effect = staff.takeSound()) sound.effect(effect);
+            camera.setDoorClearance(staff.doorBusy());
             animation.update(deltaTime);
             if (animation.takeArrival()) {
                 machine.setStatus("Giao dịch thành công! Đồ uống đã ở khay nhận hàng.");
@@ -428,7 +514,7 @@ int main() {
                     captureMouse(window, state, true);
                 }
             }
-            const bool canUseDrink = !cash.active() && !animation.active() && !animation.pressing() &&
+            const bool canUseDrink = !staff.active() && !cash.active() && !animation.active() && !animation.pressing() &&
                                      !camera.interacting() && !camera.presentationActive() && !drink.inspecting() &&
                                      glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
                                      (state.mouseCaptured && !ImGui::GetIO().WantCaptureMouse);
@@ -441,7 +527,7 @@ int main() {
             if (!camera.presentationActive()) camera.focusPayment(cash.active());
             if (camera.interacting() && !camera.transitioning() && !cash.active() && state.mouseCaptured)
                 captureMouse(window, state, false);
-            const bool walking = state.mouseCaptured && !camera.interacting() && !camera.presentationActive() && !drink.inspecting() &&
+            const bool walking = state.mouseCaptured && !staff.doorBusy() && !staff.cratePlacing() && !camera.interacting() && !camera.presentationActive() && !drink.inspecting() &&
                                  glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
                                  !ImGui::GetIO().WantCaptureKeyboard;
             const auto down = [&](int key) { return walking && glfwGetKey(window, key) == GLFW_PRESS; };
@@ -452,6 +538,7 @@ int main() {
             camera.update(deltaTime, static_cast<float>(down(GLFW_KEY_W)) - down(GLFW_KEY_S),
                           static_cast<float>(down(GLFW_KEY_D)) - down(GLFW_KEY_A),
                           down(GLFW_KEY_LEFT_SHIFT) || down(GLFW_KEY_RIGHT_SHIFT));
+            if (staff.active()) staff.updateAim(camera, machine);
             const auto moving = animation.productIndex() >= 0 ?
                 animation.deliveryPosition(machine.productPosition(animation.productIndex())) : glm::vec3(0, 2.65f, 0);
             camera.updatePresentation(deltaTime, options.cinematic, animation.active(), animation.progress(), moving);
@@ -476,12 +563,12 @@ int main() {
                 static_cast<float>(windowWidth) * state.viewportRatio;
             double cursorX = windowWidth * state.viewportRatio * 0.5, cursorY = windowHeight * 0.5;
             if (!state.mouseCaptured) glfwGetCursorPos(window, &cursorX, &cursorY);
-            if (!cash.active() && !camera.transitioning() && width > 0 && height > 0 &&
+            if (!staff.active() && !cash.active() && !camera.transitioning() && width > 0 && height > 0 &&
                 windowWidth > 0 && windowHeight > 0 && cursorX < sceneWidthPoints)
                 interaction.hover(static_cast<float>(cursorX * width / windowWidth),
                                   static_cast<float>(cursorY * height / windowHeight), sceneWidth, height, camera);
-            else machine.hover(-1);
-            renderer.render(machine, animation, camera, cash, payment, drink, options, sceneWidth, height);
+            else if (!staff.active()) machine.hover(-1);
+            renderer.render(machine, animation, camera, cash, payment, drink, options, sceneWidth, height, &staff);
             if (drink.pickingUp() && !camera.interacting() && !state.mouseCaptured) captureMouse(window, state, true);
             if (cash.active() && !state.mouseCaptured && glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
                 camera.focusPayment(true);

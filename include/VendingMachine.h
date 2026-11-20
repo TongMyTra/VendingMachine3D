@@ -19,6 +19,9 @@ public:
     const Product* selectedProduct() const;
     glm::vec3 productPosition(int index) const;
     bool vendSelected(Payment& payment, Animation& animation);
+    bool addStock(int index);
+    void setServiceDoorOpen(bool open) { serviceDoorOpen_ = open; }
+    bool serviceDoorOpen() const { return serviceDoorOpen_; }
     const char* status() const;
     void setStatus(const char* message);
 
@@ -27,4 +30,5 @@ private:
     int selectedIndex_{};
     int hoveredIndex_{-1};
     const char* status_{"Vui lòng chọn sản phẩm."};
+    bool serviceDoorOpen_{};
 };

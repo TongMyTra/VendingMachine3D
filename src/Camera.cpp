@@ -44,7 +44,8 @@ glm::vec3 Camera::forwardDirection() const {
 
 glm::vec3 Camera::position() const {
     if (presentationActive_) return presentationEye_;
-    return feetPosition_ + glm::vec3(0.0f, bobOffset_ - pickupMotion_ * 0.25f + std::sin(drinkTime_ * 4.0f) * 0.008f * drinkMotion_, 0.0f);
+    return feetPosition_ - forwardDirection() * (3.8f * doorClearanceBlend_) +
+        glm::vec3(0.0f, bobOffset_ - pickupMotion_ * 0.25f + std::sin(drinkTime_ * 4.0f) * 0.008f * drinkMotion_, 0.0f);
 }
 
 glm::mat4 Camera::viewMatrix() const {
@@ -117,6 +118,8 @@ void Camera::endInteraction() {
 
 void Camera::update(float deltaTime, float forward, float strafe, bool sprint) {
     const float dt = std::clamp(deltaTime, 0.0f, 0.25f);
+    const float clearanceTarget = doorClearance_ ? 1.0f : 0.0f;
+    doorClearanceBlend_ = glm::mix(doorClearanceBlend_, clearanceTarget, 1.0f - std::exp(-4.5f * dt));
     if (interacting_) {
         const bool wasTransitioning = transitioning();
         transitionTime_ = std::min(transitionTime_ + dt, transitionDuration);

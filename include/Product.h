@@ -12,6 +12,8 @@ enum class ProductType {
     Bakery,
 };
 
+inline constexpr int productSlotCapacity = 6;
+
 struct Product {
     int id{};
     std::string name;

@@ -6,6 +6,7 @@
 #include "Payment.h"
 #include "HeldDrink.h"
 #include "SceneOptions.h"
+#include "StaffMode.h"
 #include "CampusLayout.h"
 #include "StudentCrowd.h"
 #include <glm/gtc/quaternion.hpp>
@@ -25,8 +26,8 @@
 #include <vector>
 
 namespace {
-    static const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$-";
-    static const std::array<std::array<int, 7>, 39> glyphs{{
+    static const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$-/";
+    static const std::array<std::array<int, 7>, 40> glyphs{{
         {{14,17,17,31,17,17,17}},{{30,17,17,30,17,17,30}},
         {{14,17,16,16,16,17,14}},{{30,17,17,17,17,17,30}},
         {{31,16,16,30,16,16,31}},{{31,16,16,30,16,16,16}},
@@ -46,7 +47,7 @@ namespace {
         {{14,16,16,30,17,17,14}},{{31,1,2,4,8,8,8}},
         {{14,17,17,14,17,17,14}},{{14,17,17,15,1,1,14}},
         {{0,0,0,0,0,6,6}},{{4,15,20,14,5,30,4}},
-        {{0,0,0,31,0,0,0}}
+        {{0,0,0,31,0,0,0}},{{1,1,2,4,8,16,16}}
     }};
 
 struct Face {
@@ -325,7 +326,7 @@ void Renderer::drawText(const glm::mat4& vp, const std::string& text,
 }
 
 void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& product,
-                           const glm::vec3& position, bool selected, float opening) {
+                           const glm::vec3& position, bool selected, float opening, bool detailed) {
     activeTexture_ = productTextures_[std::clamp(product.id - 1, 0, 11)];
     const float brightness = selected ? 1.16f : 1.0f;
     const glm::vec3 color = glm::min(product.color * brightness, glm::vec3(1.0f));
@@ -365,19 +366,36 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
         break;
     }
     case ProductType::Bottle: {
+        const glm::vec3 clearPlastic{0.77f, 0.91f, 0.88f};
         useTexture_ = true;
         drawCylinder(viewProjection, {position.x, position.y - 0.045f, position.z},
                      {0.30f, 0.43f, 0.30f}, color);
         useTexture_ = false;
         drawCylinder(viewProjection, {position.x, position.y + 0.245f, position.z},
-                     {0.30f, 0.18f, 0.30f}, color, true);
+                     {0.30f, 0.18f, 0.30f}, glm::mix(color, clearPlastic, 0.28f), true);
         drawCylinder(viewProjection, {position.x, position.y + 0.36f, position.z},
-                     {0.13f, 0.12f, 0.13f}, color);
+                     {0.13f, 0.12f, 0.13f}, glm::mix(color, clearPlastic, 0.18f));
         drawCylinder(viewProjection, position + glm::vec3(0, -0.266f, 0), {0.285f, 0.025f, 0.285f}, glm::mix(color, glm::vec3(0.7f, 0.83f, 0.86f), 0.35f));
-        for (float y : {-0.23f, -0.19f, 0.11f, 0.15f})
+        if (detailed) for (float y : {-0.23f, -0.19f, 0.11f, 0.15f})
             drawCylinder(viewProjection, position + glm::vec3(0, y, 0), {0.308f, 0.012f, 0.308f}, glm::mix(color, glm::vec3(0.87f, 0.96f, 0.98f), 0.23f));
-        for (float y : {0.35f, 0.375f, 0.40f})
+        if (detailed) for (float y : {0.35f, 0.375f, 0.40f})
             drawCylinder(viewProjection, position + glm::vec3(0, y, 0), {0.145f, 0.010f, 0.145f}, {0.63f, 0.80f, 0.83f});
+        const glm::vec3 label = product.id == 5 ? glm::vec3(0.15f, 0.48f, 0.72f) :
+            product.id == 6 ? glm::vec3(0.92f, 0.30f, 0.09f) : product.id == 7 ? glm::vec3(0.38f, 0.65f, 0.18f) :
+            product.id == 8 ? glm::vec3(0.83f, 0.34f, 0.41f) : product.id == 10 ? glm::vec3(0.80f, 0.28f, 0.45f) :
+            glm::vec3(0.34f, 0.59f, 0.35f);
+        drawBox(viewProjection, {position.x, position.y - 0.005f, position.z + 0.292f},
+                {0.36f, 0.24f, 0.018f}, {0.97f, 0.94f, 0.82f});
+        drawBox(viewProjection, {position.x, position.y + 0.103f, position.z + 0.305f},
+                {0.35f, 0.035f, 0.012f}, label);
+        drawBox(viewProjection, {position.x, position.y - 0.111f, position.z + 0.305f},
+                {0.35f, 0.028f, 0.012f}, label);
+        if (detailed) {
+            drawText(viewProjection, productCode(product.id - 1),
+                     {position.x, position.y + 0.035f, position.z + 0.318f}, 0.048f, {0.12f, 0.28f, 0.23f});
+            drawText(viewProjection, product.id == 5 ? "PURE" : product.id == 6 ? "ORANGE" : product.id == 7 ? "APPLE" : product.id == 8 ? "PEACH" : product.id == 10 ? "STRAWBERRY" : "MATCHA",
+                     {position.x, position.y - 0.055f, position.z + 0.318f}, 0.034f, label);
+        }
         if (opening < 1.0f) {
             const auto base = parentTransform_;
             const float twist = std::clamp((opening - 0.15f) / 0.65f, 0.0f, 1.0f);
@@ -387,7 +405,7 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
             const glm::vec3 capColor = product.id == 6 ? glm::vec3(0.90f, 0.25f, 0.05f) : glm::vec3(0.12f, 0.32f, 0.72f);
             drawCylinder(viewProjection, {0, 0, 0}, {0.15f, 0.055f, 0.15f}, capColor);
             drawBox(viewProjection, {0, 0.031f, 0}, {0.11f, 0.005f, 0.018f}, {0.8f, 0.85f, 0.9f});
-            for (int rib = 0; rib < 16; ++rib) {
+            if (detailed) for (int rib = 0; rib < 16; ++rib) {
                 const float angle = rib * glm::two_pi<float>() / 16;
                 drawCylinder(viewProjection, {std::cos(angle) * 0.076f, 0, std::sin(angle) * 0.076f},
                              {0.007f, 0.048f, 0.007f}, capColor * 0.8f);
@@ -432,7 +450,7 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
                 glm::min(color * 0.72f, glm::vec3(1.0f)));
         break;
     }
-    if (product.type == ProductType::Can || product.type == ProductType::Bottle) {
+    if (detailed && (product.type == ProductType::Can || product.type == ProductType::Bottle)) {
         const float radius = product.type == ProductType::Can ? 0.174f : 0.154f;
         for (int bead = 0; bead < 24; ++bead) {
             const float angle = bead * 2.39996f + product.id;
@@ -451,7 +469,7 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
 }
 
 void Renderer::render(const VendingMachine& machine, const Animation& animation,
-                      const Camera& camera, const CashInteraction& cash, const Payment& payment, const HeldDrink& drink, const SceneOptions& options, int width, int height) {
+                      const Camera& camera, const CashInteraction& cash, const Payment& payment, const HeldDrink& drink, const SceneOptions& options, int width, int height, const StaffMode* staff) {
     if (width <= 0 || height <= 0) {
         return;
     }
@@ -464,7 +482,7 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         glActiveTexture(GL_TEXTURE0);
         glBindFramebuffer(GL_FRAMEBUFFER, reflectionFbo_);
         reflectionPass_ = true;
-        render(machine, animation, camera, cash, payment, drink, options, reflectionWidth_, reflectionHeight_);
+        render(machine, animation, camera, cash, payment, drink, options, reflectionWidth_, reflectionHeight_, staff);
         reflectionPass_ = false;
         glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFbo));
     }
@@ -519,21 +537,21 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
 
     suppressGeometry_ = cutaway;
     // Rounded-looking pastel shell, built from softly contrasting cabinet panels.
-    drawBox(viewProjection, {0.0f, 2.72f, -0.72f}, {4.70f, 5.44f, 0.14f},
+    drawBox(viewProjection, {0.0f, 2.77f, -1.34f}, {4.92f, 5.70f, 0.14f},
             mint);
-    drawBox(viewProjection, {-2.27f, 2.72f, -0.02f}, {0.14f, 5.25f, 1.34f},
+    drawBox(viewProjection, {-2.38f, 2.77f, 0.0f}, {0.14f, 5.53f, 2.72f},
             mintLight);
-    drawBox(viewProjection, {2.27f, 2.72f, -0.02f}, {0.12f, 5.25f, 1.32f},
+    drawBox(viewProjection, {2.38f, 2.77f, 0.0f}, {0.12f, 5.53f, 2.72f},
             {0.40f, 0.70f, 0.60f});
-    drawBox(viewProjection, {0.0f, 5.37f, -0.02f}, {4.60f, 0.14f, 1.35f},
+    drawBox(viewProjection, {0.0f, 5.57f, 0.0f}, {4.82f, 0.14f, 2.72f},
             mint);
-    drawBox(viewProjection, {0.0f, 0.07f, -0.02f}, {4.60f, 0.14f, 1.35f},
+    drawBox(viewProjection, {0.0f, -0.03f, 0.0f}, {4.82f, 0.14f, 2.72f},
             mint);
 
     // Display chamber with a warm cream interior and a clean white surround.
-    drawBox(viewProjection, {-0.43f, 2.78f, -0.70f}, {3.46f, 4.82f, 0.035f},
+    drawBox(viewProjection, {-0.43f, 2.78f, -1.29f}, {3.46f, 4.82f, 0.035f},
             {0.82f, 0.89f, 0.82f});
-    drawBox(viewProjection, {-0.43f, 2.78f, -0.665f}, {3.30f, 4.66f, 0.035f},
+    drawBox(viewProjection, {-0.43f, 2.78f, -1.255f}, {3.30f, 4.66f, 0.035f},
             {0.89f, 0.91f, 0.84f});
     drawBox(viewProjection, {-2.05f, 2.76f, 0.015f}, {0.12f, 5.02f, 1.30f},
             mint);
@@ -545,39 +563,48 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     for (int shelf = 0; shelf < 3; ++shelf) {
         const float productY = 4.33f - static_cast<float>(shelf) * 1.32f;
         const float shelfY = productY - 0.40f;
-        drawBox(viewProjection, {-0.43f, shelfY, 0.34f}, {3.18f, 0.075f, 0.88f},
+        drawBox(viewProjection, {-0.43f, shelfY, -0.30f}, {3.18f, 0.075f, 2.02f},
                 {0.83f, 0.86f, 0.78f});
-        drawBox(viewProjection, {-0.43f, shelfY + 0.055f, 0.79f},
+        drawBox(viewProjection, {-0.43f, shelfY + 0.055f, 0.73f},
                 {3.10f, 0.028f, 0.035f}, {0.94f, 0.98f, 0.91f}, 0.45f);
-        drawBox(viewProjection, {-0.43f, shelfY - 0.09f, 0.80f},
+        drawBox(viewProjection, {-0.43f, shelfY - 0.09f, 0.75f},
                 {3.08f, 0.13f, 0.035f}, {0.75f, 0.88f, 0.79f});
     }
 
     // Soft white interior LED strips.
-    drawBox(viewProjection, {-1.97f, 2.78f, 0.57f}, {0.035f, 4.68f, 0.04f},
+    drawBox(viewProjection, {-1.97f, 2.78f, 0.54f}, {0.035f, 4.68f, 0.04f},
             {0.96f, 0.99f, 0.91f}, 0.85f);
-    drawBox(viewProjection, {1.10f, 2.78f, 0.57f}, {0.035f, 4.68f, 0.04f},
+    drawBox(viewProjection, {1.10f, 2.78f, 0.54f}, {0.035f, 4.68f, 0.04f},
             {0.96f, 0.99f, 0.91f}, 0.85f);
 
     for (int i = 0; i < static_cast<int>(machine.products().size()); ++i) {
         const Product& product = machine.products()[static_cast<std::size_t>(i)];
         glm::vec3 position = machine.productPosition(i);
-        const bool highlighted = i == machine.selectedIndex() || i == machine.hoveredIndex();
+        const bool highlighted = !(staff && staff->active()) &&
+            (i == machine.selectedIndex() || i == machine.hoveredIndex());
         // A rotating helix and carriage sit behind each product.
         const auto original = parentTransform_;
         const bool pushing = animation.active() && animation.productIndex() == i;
         const float push = pushing ? std::min(animation.progress() * 3.0f, 1.0f) : 0;
-        drawBox(viewProjection, {position.x, position.y - 0.12f, -0.25f + push * 0.55f},
+        drawBox(viewProjection, {position.x, position.y - 0.12f, -1.15f + push * 1.58f},
                 {0.23f, 0.28f, 0.035f}, {0.56f, 0.64f, 0.59f});
         const float phase = animation.active() && animation.productIndex() == i ? animation.progress() * 20.0f : 0;
         for (int segment = 0; segment < 36; ++segment) {
             const float t = segment / 35.0f;
             const float angle = t * glm::two_pi<float>() * 3 + phase;
             drawBox(viewProjection, {position.x + 0.12f * std::cos(angle),
-                position.y - 0.23f + 0.07f * std::sin(angle), -0.22f + t * 0.60f},
+                position.y - 0.23f + 0.07f * std::sin(angle), -1.12f + t * 1.60f},
                 {0.035f, 0.035f, 0.045f}, {0.58f, 0.65f, 0.62f});
         }
-        if (product.stock > 0) drawProduct(viewProjection, product, position, highlighted);
+        for (int unit = 0; unit < product.stock; ++unit) {
+            glm::vec3 stockedPosition = position;
+            stockedPosition.z = 0.48f - unit * 0.31f;
+            const float scale = unit == 0 ? 1.0f : 0.66f;
+            parentTransform_ = glm::translate(glm::mat4(1.0f), stockedPosition) *
+                glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+            drawProduct(viewProjection, product, glm::vec3(0), highlighted && unit == 0, 0.0f, unit == 0);
+        }
+        parentTransform_ = original;
         if (animation.active() && animation.productIndex() == i) {
             const auto moving = animation.deliveryPosition(position);
             parentTransform_ = glm::translate(glm::mat4(1), moving) *
@@ -596,9 +623,11 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         const auto position = machine.productPosition(i);
         const auto& product = machine.products()[static_cast<std::size_t>(i)];
         char tag[24];
-        std::snprintf(tag, sizeof(tag), "%s %.0fK", productCode(i).c_str(), product.price / 1000.0f);
+        std::snprintf(tag, sizeof(tag), "%s %.0fK %d/6", productCode(i).c_str(), product.price / 1000.0f, product.stock);
+        const glm::vec3 stockTint = product.stock >= productSlotCapacity ? glm::vec3(0.78f, 0.91f, 0.75f) :
+            product.stock == 0 ? glm::vec3(0.95f, 0.69f, 0.65f) : glm::vec3(0.97f, 0.88f, 0.64f);
         drawBox(viewProjection, {position.x, position.y - 0.49f, 0.825f},
-                {0.73f, 0.13f, 0.025f}, cream);
+                {0.73f, 0.13f, 0.025f}, stockTint);
         drawText(viewProjection, tag, {position.x, position.y - 0.49f, 0.844f}, 0.075f, deepMint);
         if (product.stock > 0)
             drawText(viewProjection, labels[i], {position.x, position.y, 0.652f}, 0.065f, deepMint);
@@ -621,40 +650,48 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     // Cream control column with a mint bezel around the screen and keypad.
     drawBox(viewProjection, {1.69f, 2.72f, 0.57f}, {0.93f, 4.84f, 0.24f},
             cream);
-    drawBox(viewProjection, {1.69f, 4.60f, 0.72f}, {0.73f, 0.77f, 0.08f},
+    drawBox(viewProjection, {1.69f, 4.55f, 0.72f}, {0.83f, 0.91f, 0.08f},
             deepMint);
-    drawBox(viewProjection, {1.69f, 4.60f, 0.77f}, {0.65f, 0.68f, 0.035f},
+    drawBox(viewProjection, {1.69f, 4.55f, 0.77f}, {0.75f, 0.83f, 0.035f},
             {0.77f, 0.91f, 0.80f});
-    drawBox(viewProjection, {1.69f, 4.76f, 0.794f}, {0.48f, 0.035f, 0.012f},
+    drawBox(viewProjection, {1.69f, 4.92f, 0.794f}, {0.54f, 0.028f, 0.012f},
             {0.23f, 0.54f, 0.43f}, 0.7f);
-    drawBox(viewProjection, {1.69f, 4.60f, 0.794f}, {0.42f, 0.025f, 0.012f},
+    drawBox(viewProjection, {1.69f, 4.67f, 0.794f}, {0.54f, 0.022f, 0.012f},
             {0.31f, 0.61f, 0.48f}, 0.55f);
-    drawBox(viewProjection, {1.69f, 4.45f, 0.794f}, {0.48f, 0.025f, 0.012f},
+    drawBox(viewProjection, {1.69f, 4.42f, 0.794f}, {0.54f, 0.022f, 0.012f},
             {0.31f, 0.61f, 0.48f}, 0.55f);
 
-    drawText(viewProjection, labels[machine.selectedIndex()], {1.69f, 4.66f, 0.82f}, 0.060f, deepMint);
+    drawText(viewProjection, staff && staff->active() ? (staff->doorOpen() ? "STAFF OPEN" : "STAFF MODE") : labels[machine.selectedIndex()], {1.69f, 4.76f, 0.82f}, 0.075f, deepMint);
 
     if (const Product* selected = machine.selectedProduct()) {
         char price[24];
         std::snprintf(price, sizeof(price), "%s %.0fK", productCode(machine.selectedIndex()).c_str(), selected->price / 1000.0f);
-        drawText(viewProjection, price, {1.69f, 4.54f, 0.82f}, 0.065f, deepMint);
+        drawText(viewProjection, price, {1.69f, 4.56f, 0.82f}, 0.070f, deepMint);
     }
 
     const Product* selectedItem = machine.selectedProduct();
-    const char* lcdState = animation.active() ? "VENDING" : animation.delivered() ? "THANK YOU" :
+    const char* lcdState = staff && staff->active() ?
+        ((staff->fullStockActive() || staff->doorOpen()) ? "RESTOCK" : "SERVICE") : animation.active() ? "VENDING" : animation.delivered() ? "THANK YOU" :
         selectedItem && selectedItem->stock <= 0 ? "SOLD OUT" :
         selectedItem && payment.balance() < selectedItem->price ? "ADD CASH" : "CONFIRM";
-    drawText(viewProjection, lcdState, {1.69f, 4.80f, 0.82f}, 0.055f, deepMint);
+    drawText(viewProjection, lcdState, {1.69f, 4.91f, 0.82f}, 0.065f, deepMint);
     char credit[24];
     if (cash.isChange() || cash.state() == CashInteraction::State::Returning ||
         cash.state() == CashInteraction::State::AwaitingCollection || cash.state() == CashInteraction::State::Collecting)
         std::snprintf(credit, sizeof(credit), "RETURN %d", cash.amount());
     else std::snprintf(credit, sizeof(credit), "%.0f VND", payment.balance());
-    drawText(viewProjection, credit, {1.69f, 4.40f, 0.82f}, 0.060f, deepMint);
+    drawText(viewProjection, credit, {1.69f, 4.39f, 0.82f}, 0.065f, deepMint);
 
     char stock[20];
-    std::snprintf(stock, sizeof(stock), "STOCK %d", selectedItem ? selectedItem->stock : 0);
-    drawText(viewProjection, stock, {1.69f, 4.29f, 0.82f}, 0.05f, deepMint);
+    std::snprintf(stock, sizeof(stock), "STOCK %d OF 6", selectedItem ? selectedItem->stock : 0);
+    drawText(viewProjection, stock, {1.69f, 4.25f, 0.82f}, 0.045f, deepMint);
+    if (staff && staff->active() && staff->fullStockActive()) {
+        const float progress = staff->fullStockTotal() > 0 ?
+            static_cast<float>(staff->fullStockAdded()) / staff->fullStockTotal() : 0.0f;
+        drawBox(viewProjection, {1.69f, 4.16f, 0.80f}, {0.62f, 0.045f, 0.015f}, {0.60f, 0.73f, 0.64f});
+        drawBox(viewProjection, {1.38f + 0.31f * progress, 4.16f, 0.812f},
+                {0.62f * progress, 0.025f, 0.012f}, {0.20f, 0.77f, 0.46f}, 0.4f);
+    }
 
     for (int key = 0; key < 12; ++key) {
         const int row = key / 3;
@@ -662,12 +699,13 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         const float x = 1.46f + static_cast<float>(column) * 0.22f;
         const float y = 3.70f - static_cast<float>(row) * 0.22f;
         const float depth = animation.buttonDepth(key);
-        const bool lit = key == machine.selectedIndex();
+        const bool lit = !(staff && staff->active()) && key == machine.selectedIndex();
         const bool soldOut = machine.products()[key].stock <= 0;
         drawBox(viewProjection, {x, y, 0.72f - depth}, {0.15f, 0.15f, 0.08f},
                 {0.77f, 0.87f, 0.79f});
         drawBox(viewProjection, {x, y, 0.765f - depth}, {0.14f, 0.12f, 0.012f},
-                soldOut ? glm::vec3(0.67f, 0.66f, 0.61f) : lit ? glm::vec3(0.56f, 0.94f, 0.69f) : cream,
+                staff && staff->active() ? glm::vec3(0.67f, 0.71f, 0.67f) :
+                    soldOut ? glm::vec3(0.67f, 0.66f, 0.61f) : lit ? glm::vec3(0.56f, 0.94f, 0.69f) : cream,
                 lit && !soldOut ? 0.3f : 0.0f);
     }
 
@@ -704,32 +742,168 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
     drawBox(viewProjection, {-0.43f, 0.66f, 0.99f}, {1.62f, 0.12f, 0.04f}, cream);
     drawBox(viewProjection, {-0.43f, 0.70f, 1.02f}, {0.35f, 0.045f, 0.05f}, mintLight);
     for (float x : {-1.85f, 1.85f})
-        for (float z : {-0.45f, 0.45f})
+        for (float z : {-1.0f, 1.0f})
             drawCylinder(viewProjection, {x, -0.035f, z}, {0.22f, 0.13f, 0.22f}, deepMint);
 
     suppressGeometry_ = cutaway;
-    // A soft mint pane over the products suggests clear reflective glass.
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
-    drawMesh(viewProjection, {-0.43f, 2.78f, 1.25f}, {3.10f, 4.58f, 0.018f},
-             {0.79f, 0.95f, 0.86f}, 0, 36, 0.055f);
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
+    // Left-hinged glass door swings open for staff restocking.
+    {
+        // The left edge stays on the cabinet hinge; the free edge and handle swing outward.
+        parentTransform_ = glm::translate(glm::mat4(1.0f), {-2.05f, 0.0f, 1.25f}) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(staff ? -staff->doorAngle() : 0.0f), glm::vec3(0, 1, 0));
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        // Stop the glass above the dispensing bay so the collection hatch stays exposed.
+        drawMesh(viewProjection, {1.62f, 3.03f, 0.0f}, {3.18f, 4.00f, 0.018f},
+                 {0.78f, 0.94f, 0.88f}, 0, 36, staff && staff->doorOpen() ? 0.035f : 0.085f);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        {
+            const auto frameColor = glm::vec3(0.68f, 0.86f, 0.77f);
+            drawBox(viewProjection, {1.62f, 5.03f, 0.0f}, {3.28f, 0.12f, 0.10f}, frameColor);
+            drawBox(viewProjection, {1.62f, 1.03f, 0.0f}, {3.28f, 0.12f, 0.10f}, frameColor);
+            drawBox(viewProjection, {0.04f, 3.03f, 0.0f}, {0.11f, 4.00f, 0.10f}, frameColor);
+            drawBox(viewProjection, {3.20f, 3.03f, 0.0f}, {0.11f, 4.00f, 0.10f}, frameColor);
+            drawBox(viewProjection, {3.03f, 2.72f, 0.09f}, {0.045f, 0.52f, 0.055f}, deepMint);
+            drawBox(viewProjection, {3.03f, 2.99f, 0.09f}, {0.14f, 0.06f, 0.07f}, mintLight);
+        }
+        parentTransform_ = glm::mat4(1.0f);
+    }
+    // Three visible knuckles pin the left-hinged door to the cabinet frame.
+    for (float y : {1.28f, 3.03f, 4.78f}) {
+        drawCylinder(viewProjection, {-2.05f, y, 1.30f}, {0.055f, 0.34f, 0.055f}, {0.62f, 0.70f, 0.65f});
+        drawCylinder(viewProjection, {-2.05f, y + 0.12f, 1.30f}, {0.067f, 0.045f, 0.067f}, {0.82f, 0.86f, 0.77f});
+    }
+
+    // Reserve cartons beside the machine, with visible stock and hinged top flaps.
+    const auto crate = StaffMode::stockCratePosition();
+    const glm::vec3 carton{0.75f, 0.48f, 0.31f};
+    if (staff && staff->active() && staff->crateCarried()) {
+        const auto frame = glm::inverse(camera.viewMatrix());
+        parentTransform_ = frame * glm::translate(glm::mat4(1.0f), {0.52f, -0.31f, -1.08f});
+        drawBox(viewProjection, glm::vec3(0), {0.82f, 0.48f, 0.62f}, carton);
+        drawBox(viewProjection, {0, -0.01f, 0.317f}, {0.78f, 0.40f, 0.018f}, {0.88f, 0.68f, 0.49f});
+        drawText(viewProjection, "MINT FRESH", {0, -0.01f, 0.33f}, 0.075f, deepMint);
+        parentTransform_ = frame * glm::translate(glm::mat4(1.0f), {0.22f, -0.58f, -1.03f}) *
+            glm::rotate(glm::mat4(1.0f), glm::half_pi<float>(), glm::vec3(0, 0, 1));
+        drawHand(viewProjection, false, true);
+        parentTransform_ = glm::mat4(1.0f);
+    } else if (staff && staff->active() && staff->cratePlacing()) {
+        const float t = std::clamp(staff->cratePlacementProgress(), 0.0f, 1.0f);
+        const float scale = 0.58f + 0.42f * t * t * (3.0f - 2.0f * t);
+        parentTransform_ = glm::translate(glm::mat4(1.0f), staff->cratePlacementPosition()) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+        drawBox(viewProjection, glm::vec3(0), {1.42f, 0.78f, 1.05f}, carton);
+        drawBox(viewProjection, {0, 0.01f, 0.54f}, {1.34f, 0.67f, 0.025f}, {0.82f, 0.57f, 0.37f});
+        drawBox(viewProjection, {0, 0.02f, 0.56f}, {1.19f, 0.52f, 0.018f}, {0.88f, 0.68f, 0.49f});
+        drawText(viewProjection, "MINT FRESH", {0, 0.06f, 0.575f}, 0.105f, {0.37f, 0.30f, 0.22f});
+        parentTransform_ = glm::mat4(1.0f);
+    } else {
+        const bool boxOpen = staff && staff->crateOpen();
+        if (boxOpen) {
+            // Keep the front wall low and split the carton into separate panels so
+            // the reserve bottles remain visible from the player's POV.
+            drawBox(viewProjection, crate + glm::vec3(0, 0.09f, 0), {1.42f, 0.18f, 1.05f}, carton);
+            drawBox(viewProjection, crate + glm::vec3(-0.67f, 0.34f, 0), {0.08f, 0.52f, 1.05f}, carton);
+            drawBox(viewProjection, crate + glm::vec3(0.67f, 0.34f, 0), {0.08f, 0.52f, 1.05f}, carton);
+            drawBox(viewProjection, crate + glm::vec3(0, 0.34f, -0.485f), {1.42f, 0.52f, 0.08f}, carton);
+            drawBox(viewProjection, crate + glm::vec3(0, 0.20f, 0.49f), {1.42f, 0.32f, 0.08f}, carton);
+            drawText(viewProjection, "MINT FRESH", crate + glm::vec3(0, 0.20f, 0.535f), 0.085f, {0.37f, 0.30f, 0.22f});
+            for (int index = 0; index < 12; ++index) {
+                if (staff->reserve(index) <= 0) continue;
+                const int column = index % 4;
+                const int depth = index / 4;
+                const auto& product = machine.products()[static_cast<std::size_t>(index)];
+                const auto original = parentTransform_;
+                const glm::vec3 itemPosition = crate + glm::vec3(-0.48f + column * 0.32f, 0.50f, 0.34f - depth * 0.34f);
+                parentTransform_ = glm::translate(glm::mat4(1.0f), itemPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(0.42f));
+                drawProduct(viewProjection, product, glm::vec3(0), index == staff->selectedSupply(), 0.0f, false);
+                parentTransform_ = original;
+            }
+            if (staff->selectedSupply() >= 0 && staff->selectedSupply() < static_cast<int>(machine.products().size())) {
+                const std::string stockText = "STOCK " + std::to_string(staff->reserve(staff->selectedSupply()));
+                drawText(viewProjection, stockText, crate + glm::vec3(0, 0.04f, 0.59f), 0.11f, deepMint);
+            }
+        } else {
+            drawBox(viewProjection, crate + glm::vec3(0, 0.39f, 0), {1.42f, 0.78f, 1.05f}, carton);
+            drawBox(viewProjection, crate + glm::vec3(0, 0.40f, 0.54f), {1.34f, 0.67f, 0.025f}, {0.82f, 0.57f, 0.37f});
+            drawBox(viewProjection, crate + glm::vec3(0, 0.41f, 0.56f), {1.19f, 0.52f, 0.018f}, {0.88f, 0.68f, 0.49f});
+            drawText(viewProjection, "MINT FRESH", crate + glm::vec3(0, 0.45f, 0.575f), 0.105f, {0.37f, 0.30f, 0.22f});
+        }
+        if (!boxOpen) {
+            for (float side : {-1.0f, 1.0f}) {
+                parentTransform_ = glm::translate(glm::mat4(1.0f), crate + glm::vec3(0, 0.80f, side * 0.28f));
+                drawBox(viewProjection, glm::vec3(0), {1.44f, 0.045f, 0.51f}, {0.84f, 0.65f, 0.46f});
+                parentTransform_ = glm::mat4(1.0f);
+            }
+        }
+    }
+
+    if (staff && staff->active() && staff->heldProduct() >= 0 && !staff->transferActive()) {
+        const auto frame = glm::inverse(camera.viewMatrix());
+        parentTransform_ = frame * glm::translate(glm::mat4(1.0f), {0.30f, -0.42f, -0.94f}) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(15.0f), glm::vec3(1, 0, 0));
+        drawProduct(viewProjection, machine.products()[static_cast<std::size_t>(staff->heldProduct())], glm::vec3(0), false, 0.0f, true);
+        parentTransform_ = frame * glm::translate(glm::mat4(1.0f), {0.44f, -0.58f, -1.02f}) *
+            glm::rotate(glm::mat4(1.0f), glm::half_pi<float>(), glm::vec3(0, 0, 1));
+        drawHand(viewProjection, false, true);
+        parentTransform_ = glm::mat4(1.0f);
+    }
+    if (staff && staff->active() && staff->doorOpen() && staff->heldProduct() >= 0 && staff->hoveredSlot() >= 0) {
+        const int slot = staff->hoveredSlot();
+        const auto bin = machine.productPosition(slot);
+        const bool valid = staff->canPlaceInHovered(machine);
+        const glm::vec3 tint = valid ? glm::vec3(0.22f, 0.95f, 0.56f) : glm::vec3(0.96f, 0.24f, 0.21f);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        drawMesh(viewProjection, {bin.x, bin.y, 0.48f - machine.products()[static_cast<std::size_t>(slot)].stock * 0.31f},
+                 {0.25f, 0.37f, 0.24f}, tint, sphereFirst_, sphereCount_, 0.42f, 0.3f);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
+    if (staff && staff->transferActive() && staff->transferProduct() >= 0) {
+        parentTransform_ = glm::translate(glm::mat4(1.0f), staff->transferPosition()) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(-12.0f), glm::vec3(0, 0, 1));
+        drawProduct(viewProjection, machine.products()[static_cast<std::size_t>(staff->transferProduct())], glm::vec3(0), false, 0.0f, true);
+        parentTransform_ = glm::mat4(1.0f);
+    }
+    if (staff && staff->active() && staff->doorBusy()) {
+        const auto frame = glm::inverse(camera.viewMatrix());
+        const glm::vec3 rest(frame * glm::vec4(0.34f, -0.48f, -0.96f, 1.0f));
+        const glm::vec3 lockPosition{1.04f, 3.08f, 1.47f};
+        const bool keyTurn = staff->doorPhase() == StaffMode::DoorPhase::Unlocking ||
+                             staff->doorPhase() == StaffMode::DoorPhase::Locking;
+        const float reach = keyTurn ? staff->doorActionProgress() * staff->doorActionProgress() *
+            (3.0f - 2.0f * staff->doorActionProgress()) : 1.0f;
+        const glm::vec3 handAt = glm::mix(rest, lockPosition, reach);
+        parentTransform_ = glm::translate(glm::mat4(1.0f), handAt) * glm::mat4_cast(glm::quat_cast(glm::mat3(frame))) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(82.0f), glm::vec3(0, 0, 1));
+        drawHand(viewProjection, true, false);
+        if (keyTurn) {
+            parentTransform_ *= glm::translate(glm::mat4(1.0f), {0.04f, 0.19f, 0.025f}) *
+                glm::rotate(glm::mat4(1.0f), glm::radians(staff->doorActionProgress() * 90.0f), glm::vec3(0, 0, 1));
+            drawCylinder(viewProjection, glm::vec3(0), {0.018f, 0.13f, 0.018f}, {0.72f, 0.75f, 0.67f});
+            drawCylinder(viewProjection, {0, 0.075f, 0}, {0.05f, 0.02f, 0.02f}, {0.82f, 0.78f, 0.55f});
+        }
+        parentTransform_ = glm::mat4(1.0f);
+    }
 
     // Dedicated cream brand fascia above the glass.
-    drawBox(viewProjection, {0.0f, 5.10f, 0.69f}, {4.35f, 0.48f, 0.12f}, cream);
-    drawText(viewProjection, "MACHINE", {0.20f, 5.11f, 0.76f}, 0.26f, deepMint);
-    drawCylinder(viewProjection, {-1.31f, 5.07f, 0.77f}, {0.19f, 0.17f, 0.07f}, mint);
-    drawMesh(viewProjection, {-1.31f, 5.19f, 0.77f}, {0.19f, 0.20f, 0.07f},
+    drawBox(viewProjection, {0.0f, 5.38f, 0.69f}, {4.48f, 0.40f, 0.12f}, cream);
+    drawText(viewProjection, "MINT FRESH", {0.24f, 5.38f, 0.76f}, 0.24f, deepMint);
+    drawText(viewProjection, "VENDING MACHINE", {0.24f, 5.22f, 0.76f}, 0.075f, deepMint);
+    drawCylinder(viewProjection, {-1.47f, 5.35f, 0.77f}, {0.19f, 0.17f, 0.07f}, mint);
+    drawMesh(viewProjection, {-1.47f, 5.47f, 0.77f}, {0.19f, 0.20f, 0.07f},
              mint, coneFirst_, coneCount_);
 
     // Rounded corner bumpers and mint details complete the friendly silhouette.
     for (int side : {-1, 1}) {
         for (int end : {-1, 1}) {
             drawCylinder(viewProjection,
-                         {static_cast<float>(side) * 2.20f,
-                          end < 0 ? 0.20f : 5.23f, 0.64f},
+                         {static_cast<float>(side) * 2.40f,
+                          end < 0 ? 0.12f : 5.55f, 0.64f},
                          {0.12f, 0.20f, 0.12f}, mint);
         }
     }
@@ -895,8 +1069,8 @@ void Renderer::drawHeldDrink(const glm::mat4& vp, const Camera& camera, const He
     }
     const glm::vec3 relaxedPosition(cameraFrame * glm::vec4(0.32f, -0.42f, -1.0f, 1));
     const auto handPosition = glm::mix(worldPosition, relaxedPosition, drink.inspectBlend());
-    const auto handRotation = glm::slerp(drink.pickingUp() ? heldRotation : gripRotation,
-        glm::quat_cast(glm::mat3(cameraFrame)), drink.inspectBlend());
+    const auto handRotation = drink.pickingUp() ?
+        glm::slerp(gripRotation, heldRotation, drink.pickupProgress()) : gripRotation;
     parentTransform_ = glm::translate(glm::mat4(1), handPosition) * glm::mat4_cast(handRotation) *
         glm::translate(glm::mat4(1), {0.14f, -0.16f, 0.13f}) *
         glm::rotate(glm::mat4(1), glm::half_pi<float>(), glm::vec3(0, 0, 1));
@@ -1111,40 +1285,24 @@ void Renderer::update(float dt) {
 
 void Renderer::drawHand(const glm::mat4& vp, bool pointing, bool gripping) {
     const auto hand = parentTransform_;
-    const glm::vec3 skin{0.82f, 0.61f, 0.46f};
-    const glm::vec3 knuckle{0.77f, 0.54f, 0.40f};
-    const glm::vec3 nail{0.91f, 0.77f, 0.66f};
-    drawCylinder(vp, {0, -0.26f, 0.015f}, {0.145f, 0.30f, 0.13f}, {0.26f, 0.47f, 0.41f});
-    drawCylinder(vp, {0, -0.125f, 0.015f}, {0.15f, 0.035f, 0.135f}, {0.34f, 0.57f, 0.49f});
-    drawMesh(vp, {0, -0.075f, 0}, {0.13f, 0.13f, 0.095f}, skin, sphereFirst_, sphereCount_);
-    drawMesh(vp, {0, 0.015f, 0}, {0.235f, 0.235f, 0.11f}, skin, sphereFirst_, sphereCount_);
+    const glm::vec3 skin{0.87f, 0.66f, 0.52f};
+    const glm::vec3 sleeve{0.27f, 0.51f, 0.44f};
+    drawCylinder(vp, {0, -0.22f, 0}, {0.125f, 0.30f, 0.12f}, sleeve);
+    drawCylinder(vp, {0, -0.085f, 0}, {0.137f, 0.045f, 0.13f}, {0.42f, 0.68f, 0.57f});
+    drawMesh(vp, {0, 0.025f, 0}, {0.137f, 0.16f, 0.09f}, skin, sphereFirst_, sphereCount_);
+    const float x[] = {-0.083f, -0.028f, 0.028f, 0.083f};
+    const float length[] = {0.125f, 0.16f, 0.15f, 0.125f};
     for (int finger = 0; finger < 4; ++finger) {
-        const float x = -0.078f + finger * 0.052f;
-        const float length = finger == 1 ? 1.08f : finger == 3 ? 0.80f : 1.0f;
-        parentTransform_ = hand * glm::translate(glm::mat4(1), {x, 0.085f, 0});
-        const float curl = pointing ? (finger == 0 ? 0 : 65.0f) : gripping ? 38.0f : 12.0f;
-        for (int joint = 0; joint < 3; ++joint) {
-            parentTransform_ *= glm::rotate(glm::mat4(1), glm::radians(-curl * (joint ? 0.75f : 0.55f)), glm::vec3(1, 0, 0));
-            const float segment = (joint == 0 ? 0.075f : joint == 1 ? 0.062f : 0.045f) * length;
-            const float radius = 0.039f - joint * 0.004f;
-            drawMesh(vp, glm::vec3(0), {radius, radius, radius}, knuckle, sphereFirst_, sphereCount_);
-            drawCylinder(vp, {0, segment * 0.5f, 0}, {radius, segment, radius}, skin);
-            if (joint == 2) {
-                drawMesh(vp, {0, segment, 0}, {radius, radius, radius}, skin, sphereFirst_, sphereCount_);
-                drawBox(vp, {0, segment * 0.7f, radius * 0.46f}, {radius * 0.60f, segment * 0.55f, 0.003f}, nail);
-            }
-            parentTransform_ *= glm::translate(glm::mat4(1), {0, segment, 0});
-        }
+        parentTransform_ = hand * glm::translate(glm::mat4(1), {x[finger], 0.105f, 0}) *
+            glm::rotate(glm::mat4(1), glm::radians(pointing && finger != 3 ? -42.0f : gripping ? -28.0f : -7.0f),
+                        glm::vec3(1, 0, 0));
+        drawCylinder(vp, {0, length[finger] * 0.43f, 0}, {0.034f, length[finger], 0.034f}, skin);
+        drawMesh(vp, {0, length[finger] * 0.91f, 0}, {0.035f, 0.038f, 0.035f}, skin, sphereFirst_, sphereCount_);
     }
-    parentTransform_ = hand * glm::translate(glm::mat4(1), {-0.105f, -0.015f, 0.02f}) *
-        glm::rotate(glm::mat4(1), glm::radians(48.0f), glm::vec3(0, 0, 1));
-    for (int joint = 0; joint < 2; ++joint) {
-        parentTransform_ *= glm::rotate(glm::mat4(1), glm::radians(gripping ? -35.0f : -12.0f), glm::vec3(1, 0, 0));
-        drawCylinder(vp, {0, 0.032f, 0}, {0.047f, 0.065f, 0.045f}, skin);
-        drawMesh(vp, {0, 0.065f, 0}, {0.046f, 0.046f, 0.044f}, skin, sphereFirst_, sphereCount_);
-        parentTransform_ *= glm::translate(glm::mat4(1), {0, 0.065f, 0});
-    }
-    drawBox(vp, {0, -0.018f, 0.023f}, {0.027f, 0.035f, 0.003f}, nail);
+    parentTransform_ = hand * glm::translate(glm::mat4(1), {-0.105f, 0.015f, 0}) *
+        glm::rotate(glm::mat4(1), glm::radians(46.0f), glm::vec3(0, 0, 1));
+    drawCylinder(vp, {0, 0.045f, 0}, {0.038f, 0.105f, 0.037f}, skin);
+    drawMesh(vp, {0, 0.095f, 0}, {0.039f, 0.04f, 0.037f}, skin, sphereFirst_, sphereCount_);
     parentTransform_ = hand;
 }
 

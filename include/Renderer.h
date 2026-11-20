@@ -12,6 +12,7 @@ class HeldDrink;
 struct SceneOptions;
 struct Product;
 class VendingMachine;
+class StaffMode;
 
 class Renderer {
 public:
@@ -22,7 +23,8 @@ public:
 
     void update(float dt);
     void render(const VendingMachine& machine, const Animation& animation,
-                const Camera& camera, const CashInteraction& cash, const Payment& payment, const HeldDrink& drink, const SceneOptions& options, int width, int height);
+                const Camera& camera, const CashInteraction& cash, const Payment& payment, const HeldDrink& drink, const SceneOptions& options, int width, int height,
+                const StaffMode* staff = nullptr);
 
 private:
     void createProductTextures();
@@ -86,7 +88,8 @@ private:
                       const glm::vec3& scale, const glm::vec3& color,
                       bool tapered = false);
     void drawProduct(const glm::mat4& viewProjection, const Product& product,
-                     const glm::vec3& position, bool selected, float opening = 0.0f);
+                     const glm::vec3& position, bool selected, float opening = 0.0f,
+                     bool detailed = true);
     void drawMesh(const glm::mat4& viewProjection, const glm::vec3& position,
                   const glm::vec3& scale, const glm::vec3& color, GLint first,
                   GLint count, float opacity = 1.0f, float emissive = 0.0f);

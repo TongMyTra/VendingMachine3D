@@ -19,6 +19,7 @@ public:
     bool external() const { return external_; }
     bool presentationActive() const { return presentationActive_; }
     void updatePresentation(float dt, bool cinematic, bool vending, float progress, glm::vec3 product);
+    void setDoorClearance(bool enabled) { doorClearance_ = enabled; }
     void look(float deltaX, float deltaY);
     void setInteractionAspect(float aspect);
     void focusPayment(bool enabled);
@@ -50,6 +51,8 @@ private:
     float bobOffset_{};
     bool interacting_{};
     bool paymentFocus_{};
+    bool doorClearance_{};
+    float doorClearanceBlend_{};
     float transitionTime_{};
     glm::vec3 transitionStart_{};
     float interactionAspect_{1.1f};

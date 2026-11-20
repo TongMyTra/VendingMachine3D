@@ -82,6 +82,7 @@ add_executable(VendingMachine3D
     src/HeldDrink.cpp
     src/Interaction.cpp
     src/Animation.cpp
+    src/StaffMode.cpp
 )
 target_include_directories(VendingMachine3D PRIVATE include)
 target_link_libraries(VendingMachine3D PRIVATE
@@ -158,7 +159,7 @@ endif()
 if(BUILD_TESTING AND APPLE)
     add_executable(RendererSmokeTests tests/RendererSmokeTests.cpp src/Renderer.cpp
         src/Animation.cpp src/Camera.cpp src/CashInteraction.cpp src/Payment.cpp
-        src/HeldDrink.cpp src/Product.cpp src/VendingMachine.cpp)
+        src/HeldDrink.cpp src/Product.cpp src/VendingMachine.cpp src/StaffMode.cpp)
     target_include_directories(RendererSmokeTests PRIVATE include)
     target_link_libraries(RendererSmokeTests PRIVATE glad_gl_core_33 glm::glm OpenGL::GL)
     target_compile_definitions(RendererSmokeTests PRIVATE GL_SILENCE_DEPRECATION

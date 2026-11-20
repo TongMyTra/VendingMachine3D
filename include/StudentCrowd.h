@@ -4,7 +4,7 @@
 #include <cmath>
 
 namespace StudentCrowd {
-constexpr int count = 8;
+constexpr int count = 4;
 struct Pose { glm::vec3 position; float heading; float gait; };
 inline Pose sample(int index, float time) {
     // Separate elliptical lanes in the courtyard keep the vending row unobstructed.

@@ -15,7 +15,7 @@ int main() {
     Interaction interaction(machine, payment, animation);
     assert(productCode(0) == "A1" && productCode(7) == "B4" && productCode(11) == "C4");
     assert(!interaction.purchase()); // Insufficient money: no stock or motion changes.
-    assert(!animation.active() && machine.products()[0].stock == 8);
+    assert(!animation.active() && machine.products()[0].stock == productSlotCapacity);
     interaction.select(5);
     assert(animation.pressing());
     assert(!interaction.purchase());
@@ -62,7 +62,7 @@ int main() {
     animation.collect();
     // Sell the rest of a product, then verify sold-out cannot consume money.
     machine.select(0);
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < productSlotCapacity; ++i) {
         payment.insert(50000);
         assert(machine.vendSelected(payment, animation));
         animation.update(10);

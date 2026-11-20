@@ -64,6 +64,7 @@ VendingMachine3D/
 │   ├── Payment.h
 │   ├── Product.h
 │   ├── Renderer.h
+│   ├── StaffMode.h
 │   └── VendingMachine.h
 ├── shaders/
 │   ├── fragment.glsl
@@ -76,6 +77,7 @@ VendingMachine3D/
     ├── Payment.cpp
     ├── Product.cpp
     ├── Renderer.cpp
+    ├── StaffMode.cpp
     └── VendingMachine.cpp
 ```
 
@@ -182,6 +184,17 @@ Tay được dựng bằng lòng bàn tay, cổ tay, các đốt ngón, khớp v
 
 Hai khối giảng đường A/B màu kem với các dải ngang và cặp cửa sổ được dựng đối xứng sau hàng máy, lấy cảm hứng từ ảnh giảng đường. Mặt tiền VKU và dòng chữ tiếng Việt hiện có được giữ lại.
 
-Có 8 sinh viên procedural đeo ba lô, mặc áo polo trắng, cổ/viền tay xanh–vàng, nẹp đỏ và logo VKU theo ảnh đồng phục. Nhân vật có tóc, mặt, tay/chân phân cấp; tay và chân vung theo nhịp khi đi trên các đường vòng trong sân. Chuyển động dùng thời gian mô phỏng, lượt phản chiếu không làm nhân vật đi nhanh gấp đôi. Đây là hoạt cảnh nền, chưa có hội thoại hoặc AI tương tác với người chơi.
+Có 4 sinh viên procedural đeo ba lô, mặc áo polo trắng, cổ/viền tay xanh–vàng, nẹp đỏ và logo VKU theo ảnh đồng phục. Nhân vật có tóc, mặt, tay/chân phân cấp; tay và chân vung theo nhịp khi đi trên các đường vòng trong sân. Chuyển động dùng thời gian mô phỏng, lượt phản chiếu không làm nhân vật đi nhanh gấp đôi. Đây là hoạt cảnh nền, chưa có hội thoại hoặc AI tương tác với người chơi.
 
 `StudentCrowdRoutes` kiểm tra chuyển động theo thời gian và tuyến đi tránh khu máy; `RendererModes` so sánh khung hình trước/sau để xác nhận nhân vật thực sự chuyển động. Ảnh mới: `output/previews/vku-students-preview.png`, `output/previews/bottle-hand-detail.png`.
+
+## Chế độ nhân viên và bổ sung hàng
+
+- **F** chuyển giữa Customer Mode và Staff Mode khi không cầm đồ uống và không có hoạt ảnh giao dịch. Staff Mode vẫn dùng POV; camera ngoài bị khóa trong vai trò này. F chỉ trở về khách hàng khi cửa máy đã đóng, khóa và không còn hoạt ảnh bổ sung.
+- Đứng gần và nhìn vào cửa rồi nhấn **E** để xoay chìa khóa, mở khóa và mở cửa kính 100° bằng nội suy mượt. Nhấn **E** lần nữa để đóng cửa và khóa lại. Camera lùi nhẹ trong lúc cửa chuyển động; thao tác mua hàng bị khóa ngay khi bảo trì bắt đầu.
+- Máy có 12 ô A1–C4, mỗi ô tối đa 6 lon/chai. Sản phẩm cùng mã được xếp nối tiếp theo chiều sâu; hàng hóa, số lượng và mã ô dùng chung dữ liệu với Customer Mode. Nhìn vào một ô sẽ tô sáng và hiển thị số lượng/capacity; hàng đầy, còn chỗ và trống có trạng thái màu riêng.
+- Nhấn **F** để vào Staff Mode, kiện carton xuất hiện sẵn trên tay POV. **E** đặt thùng bên phải; **B** mở/đóng thùng khi ngắm vào nó. Dùng **← / →** chọn chai, **Enter** cầm chai, ngắm ô cùng mã rồi nhấn **chuột trái** để đặt. **O** mở cửa máy; **L** đóng và khóa cửa ở bất cứ góc nhìn nào. Có thể thêm vài chai mẫu rồi khóa cửa ngay, không cần làm đầy máy.
+- Số chai đã bổ sung hiển thị trên máy. Tồn kho chỉ tăng sau khi chai được đặt đúng ô; thao tác này không tự làm đầy các kệ.
+- Nhấn **Tab** để bật/tắt bảng tồn kho chỉ đọc. Cửa phải được đóng và khóa trước khi nhấn **F** để quay lại chế độ khách hàng.
+
+Khung máy được nới rộng và cao hơn, tách dải nhận diện MINT FRESH khỏi cánh cửa kính. Cửa dùng bản lề trái cố định và tay nắm ở mép tự do bên phải; tấm kính dừng phía trên cửa lấy hàng để không che khay. Thùng dự trữ đặt bên phải máy, phần vách thấp khi mở giúp nhìn rõ các chai. Thân máy được kéo sâu hơn để xếp sáu sản phẩm theo mỗi đường hàng, màn hình điều khiển được phóng lớn, chai PET có vai, cổ, gân, vòng nắp và nhãn màu riêng. Khi dùng **R** quan sát đồ uống, tay đứng yên cạnh camera; phép xoay chỉ áp dụng lên lon/chai.
