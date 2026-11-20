@@ -119,10 +119,10 @@ int main() {
     step(bench, 286, 0, -1);
     step(bench, 600, 1);
     assert(bench.position().z >= 1.0f && bench.position().z < 1.2f);
-    for (glm::vec3 point : {glm::vec3(0, 0, 0), glm::vec3(4.8f, 0, 0.8f), glm::vec3(-4.9f, 0, 0.4f),
+    for (glm::vec3 point : {glm::vec3(0, 0, 0), glm::vec3(-4.9f, 0, 0.4f),
             glm::vec3(-9, 0, 0), glm::vec3(9, 0, 0), glm::vec3(-13, 0, -0.2f), glm::vec3(13, 0, -0.2f)}) {
         const auto world = CampusLayout::toCampus(point);
-        assert(world.x < -12.0f); // All seven objects are on the campus's left side.
+        assert(world.x < -12.0f); // All six objects are on the campus's left side.
         assert(glm::length(glm::vec3(CampusLayout::campusToStation() * glm::vec4(world, 1)) - point) < 0.001f);
     }
     const auto stationFacing = glm::vec3(CampusLayout::stationToCampus() * glm::vec4(0, 0, 1, 0));

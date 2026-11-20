@@ -163,14 +163,8 @@ void performAction(GLFWwindow* window, int key) {
         state->drink->throwAway({-4.9f, 1.0f, 0.4f}); return;
     }
     if (key == GLFW_KEY_E && !state->camera->interacting() && !state->cash->active() && !state->drink->opening()) {
-        if (state->drink->placed() && state->camera->aimingAt(state->drink->placedPosition(), 0.35f, 4.5f)) {
-            state->drink->takePlaced(); return;
-        }
         if (state->drink->empty() && state->camera->canUseTrash()) {
             state->drink->throwAway({-4.9f, 1.0f, 0.4f}); return;
-        }
-        if (state->drink->holding() && state->camera->aimingAt({4.8f, 2.18f, 0.8f}, 1.1f, 4.5f)) {
-            state->drink->putDown({4.8f, 2.49f, 0.8f}); return;
         }
         if (!state->drink->hasProduct() && state->animation->delivered() &&
             state->camera->aimingAt({-0.43f, 0.49f, 1.17f}, 0.55f, 4.5f)) {
@@ -291,11 +285,7 @@ void drawContextHints(const AppState& state) {
         ImGui::TextUnformatted("[W A S D] Di chuyển  [Shift] Đi nhanh");
         ImGui::TextUnformatted("[Chuột] Nhìn xung quanh");
         if (!state.mouseCaptured) ImGui::TextUnformatted("[Chuột trái] Tiếp tục điều khiển POV");
-        if (drink.placed() && camera.aimingAt(drink.placedPosition(), 0.35f, 4.5f))
-            ImGui::TextUnformatted("[E] Nhặt đồ uống trên bàn");
-        else if (drink.holding() && camera.aimingAt({4.8f, 2.18f, 0.8f}, 1.1f, 4.5f))
-            ImGui::TextUnformatted("[E] Đặt đồ uống lên bàn");
-        else if (drink.empty() && camera.canUseTrash())
+        if (drink.empty() && camera.canUseTrash())
             ImGui::TextUnformatted("[E / Q] Bỏ vỏ vào sọt");
         else if (!drink.hasProduct() && animation.delivered() && camera.aimingAt({-0.43f, 0.49f, 1.17f}, 0.55f, 4.5f))
             ImGui::TextUnformatted("[E] Nhận nước trong khay");
@@ -416,6 +406,7 @@ int main() {
             glfwPollEvents();
             const double currentTime = glfwGetTime();
             const float deltaTime = std::clamp(static_cast<float>(currentTime - previousTime), 0.0f, 0.25f);
+            renderer.update(deltaTime);
             animation.update(deltaTime);
             if (animation.takeArrival()) {
                 machine.setStatus("Giao dịch thành công! Đồ uống đã ở khay nhận hàng.");

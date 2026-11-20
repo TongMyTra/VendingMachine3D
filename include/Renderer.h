@@ -20,6 +20,7 @@ public:
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
+    void update(float dt);
     void render(const VendingMachine& machine, const Animation& animation,
                 const Camera& camera, const CashInteraction& cash, const Payment& payment, const HeldDrink& drink, const SceneOptions& options, int width, int height);
 
@@ -27,6 +28,10 @@ private:
     void createProductTextures();
     void drawEnvironment(const glm::mat4& vp);
     void drawCampusArchitecture(const glm::mat4& vp);
+    void drawLectureBlocks(const glm::mat4& vp);
+    void drawStudents(const glm::mat4& vp);
+    void drawHand(const glm::mat4& vp, bool pointing, bool gripping);
+    float sceneTime_{};
     void ensureReflectionTarget(int width, int height);
     GLuint reflectionFbo_{};
     GLuint reflectionTexture_{};

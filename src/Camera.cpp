@@ -21,7 +21,6 @@ bool walkable(const glm::vec3& p) {
     for (float x : {-13.0f, 13.0f})
         if (glm::length(glm::vec2(p.x - x, p.z + 0.2f)) < 0.95f) return false;
     // Cabinet footprint expanded by the player's radius; axis-separated motion slides along it.
-    if (p.x > 3.15f && p.x < 6.45f && p.z > -0.50f && p.z < 2.1f) return false;
     if (p.x > -5.8f && p.x < -4.0f && p.z > -0.5f && p.z < 1.3f) return false;
     return !(p.x > -2.65f && p.x < 2.65f && p.z > -1.10f && p.z < 1.35f);
 }

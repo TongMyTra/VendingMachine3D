@@ -66,6 +66,18 @@ int main(int argc, char** argv) {
         if (hashes[0] == hashes[1] || hashes[0] == hashes[2]) throw std::runtime_error("Render modes produced identical frames");
         // Exercise transformed product surfaces and camera transitions on a real GL context.
         options = {};
+        Camera crowdCamera(true);
+        auto crowdHash = [&]() {
+            renderer.render(machine, animation, crowdCamera, cash, payment, drink, options, 1100, 1000);
+            std::vector<unsigned char> frame(1100 * 1000 * 4);
+            glReadPixels(0, 0, 1100, 1000, GL_RGBA, GL_UNSIGNED_BYTE, frame.data());
+            std::uint64_t hash = 0;
+            for (auto value : frame) hash = hash * 131 + value;
+            return hash;
+        };
+        const auto beforeWalking = crowdHash();
+        renderer.update(0.2f);
+        if (crowdHash() == beforeWalking) throw std::runtime_error("Student animation did not change the frame");
         drink.pickUp(machine.products()[0], {-0.43f, 0.49f, 1.17f});
         drink.update(1, false);
         drink.open(); drink.update(0.8f, false);
@@ -74,19 +86,37 @@ int main(int argc, char** argv) {
         drink.toggleInspect(); drink.inspectRotate(190, -30); drink.inspectZoom(2); drink.update(0.5f, false);
         renderer.render(machine, animation, camera, cash, payment, drink, options, 1100, 1000);
         drink.toggleInspect(); drink.update(1, false);
-        drink.putDown({4.8f, 2.49f, 0.8f}); drink.update(1, false);
         renderer.render(machine, animation, camera, cash, payment, drink, options, 1100, 1000);
+        if (argc > 3) {
+            HeldDrink bottle;
+            bottle.pickUp(machine.products()[4], {-0.43f, 0.49f, 1.17f});
+            bottle.update(1, false); bottle.toggleInspect(); bottle.inspectRotate(65, 10); bottle.inspectZoom(1);
+            bottle.update(0.5f, false);
+            renderer.render(machine, animation, camera, cash, payment, bottle, options, 1100, 1000);
+            std::vector<unsigned char> pixels(1100 * 1000 * 4);
+            glReadPixels(0, 0, 1100, 1000, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            std::ofstream output(argv[3], std::ios::binary);
+            output << "P6\n1100 1000\n255\n";
+            for (int y = 999; y >= 0; --y) for (int x = 0; x < 1100; ++x)
+                output.write(reinterpret_cast<const char*>(&pixels[(y * 1100 + x) * 4]), 3);
+        }
+        HeldDrink openingBottle;
+        openingBottle.pickUp(machine.products()[4], {-0.43f, 0.49f, 1.17f});
+        openingBottle.update(1, false); openingBottle.open(); openingBottle.update(1.1f, false);
+        renderer.render(machine, animation, camera, cash, payment, openingBottle, options, 1100, 1000);
         camera.toggleExternal();
         for (int i = 0; i < 120; ++i) camera.updatePresentation(0.01f, true, false, 0, {});
         renderer.render(machine, animation, camera, cash, payment, drink, options, 1100, 1000);
-        if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Inspection/placement/external-camera render error");
+        if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Inspection/external-camera render error");
         // Resize the target to a desktop POV and exercise reflection-target reallocation.
         glBindTexture(GL_TEXTURE_2D, color);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1600, 960, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glBindRenderbuffer(GL_RENDERBUFFER, depth);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 1600, 960);
         Camera lobbyCamera(true);
-        renderer.render(machine, animation, lobbyCamera, cash, payment, drink, options, 1600, 960);
+        HeldDrink emptyDrink;
+        renderer.update(4.0f);
+        renderer.render(machine, animation, lobbyCamera, cash, payment, emptyDrink, options, 1600, 960);
         if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Reflection resize render error");
         if (argc > 2) {
             std::vector<unsigned char> pixels(1600 * 960 * 4);

@@ -138,15 +138,13 @@ ctest --test-dir build --output-on-failure
 | **R** | Quan sát đồ uống đang cầm: kéo chuột trái xoay 360°, nghiêng; cuộn để zoom |
 | **R / ESC** | Thoát quan sát đồ uống |
 | **E**, nhìn xuống khay | Nhận đồ uống vào tay nếu ở đủ gần và tay chưa có đồ |
-| **E**, nhìn vào bàn bên phải | Đặt đồ uống đang cầm lên bàn |
-| **E**, ngắm đồ uống trên bàn | Nhặt lại, giữ nguyên trạng thái mở và dung tích |
 | **E/Q**, ngắm sọt bên trái | Ném vỏ rỗng vào sọt; không bỏ đồ uống còn nước |
 
 Các nút Solid/Wireframe, X-Ray và Cinema cũng xuất hiện trên HUD; ESC trong POV thả chuột để bấm. Khi quan sát đồ uống hoặc xem camera điện ảnh, di chuyển nhân vật tạm khóa. Camera điện ảnh tự dùng góc cắt vỏ để thấy cơ cấu bên trong và khôi phục góc nhìn đã lưu khi kết thúc.
 
-Nhãn lon/chai là texture RGB procedural có tên, mã và giá, ánh xạ quanh thân trụ bằng UV hình trụ. Không dùng giọt nước trên bề mặt; hơi lạnh xuất hiện ngắn sau khi nhận hàng. Mặt bàn và sọt là vật thể trong cảnh có vùng va chạm; thao tác đặt, nhặt, bỏ dùng hướng nhìn và giới hạn khoảng cách. Hiện quản lý **một đồ uống** (đang cầm hoặc trên bàn) mỗi lần.
+Nhãn lon/chai là texture RGB procedural có tên, mã và giá, ánh xạ quanh thân trụ bằng UV hình trụ. Giọt nước lạnh bám theo bề mặt sản phẩm khi xoay; hơi lạnh xuất hiện ngắn sau khi nhận hàng. Sọt là vật thể trong cảnh có vùng va chạm; nhận nước và bỏ vỏ dùng hướng nhìn và giới hạn khoảng cách. Hiện quản lý **một đồ uống** mỗi lần.
 
-Demo: nạp 50.000đ, chọn **A1 giá 15.000đ**, xác nhận để xem lò xo và đường rơi; nhấn E nhận 35.000đ tiền thừa. Nhận lon, R xem nhãn/khoen, R thoát, F khui rồi giữ chuột trái/E để uống. Có thể đặt lên bàn và nhặt lại giữa chừng; khi hết thì đến sọt để bỏ vỏ.
+Demo: nạp 50.000đ, chọn **A1 giá 15.000đ**, xác nhận để xem lò xo và đường rơi; nhấn E nhận 35.000đ tiền thừa. Nhận lon, R xem nhãn/khoen, R thoát, F khui rồi giữ chuột trái/E để uống. Khi hết thì đến sọt để bỏ vỏ.
 
 `CameraControls` kiểm tra chuyển camera ngoài/điện ảnh và phục hồi POV. `HeldDrinkWorkflow` kiểm tra xoay/zoom, không uống trong chế độ quan sát, đặt/nhặt giữ trạng thái, và chỉ ném được vỏ rỗng. Trên macOS, `RendererModes` tạo context OpenGL ngoài màn hình để biên dịch shader, vẽ texture và ba chế độ, kiểm tra chúng khác nhau và khôi phục trạng thái polygon trước UI. Bài này được bỏ qua nếu môi trường không cung cấp context GPU; có thể chạy trực tiếp `./build/RendererSmokeTests` ngoài sandbox.
 
@@ -154,7 +152,7 @@ Demo: nạp 50.000đ, chọn **A1 giá 15.000đ**, xác nhận để xem lò xo 
 
 Góc trên trái chỉ hiển thị **danh sách phím có thể dùng trong trạng thái hiện tại**. Đây là bảng chỉ đọc, không bắt chuột/bàn phím, không có nút bấm, kéo hoặc thu gọn; không cần Tab để dùng menu.
 
-Khi tương tác với máy: **1 / 2 / 3** chọn tờ 10.000đ / 20.000đ / 50.000đ; **E** đưa tiền vào khe khi ngắm đúng, nhận tiền hoàn hoặc nhận nước đã đến khay; **mũi tên trái/phải** chọn món, **chuột trái** nhấn keypad 3D, **Enter** xác nhận mua, **Esc** hủy/hoàn tiền và thoát. Khi cầm nước, quan sát, uống hoặc đến gần bàn/sọt, bảng tự thay các dòng hướng dẫn tương ứng.
+Khi tương tác với máy: **1 / 2 / 3** chọn tờ 10.000đ / 20.000đ / 50.000đ; **E** đưa tiền vào khe khi ngắm đúng, nhận tiền hoàn hoặc nhận nước đã đến khay; **mũi tên trái/phải** chọn món, **chuột trái** nhấn keypad 3D, **Enter** xác nhận mua, **Esc** hủy/hoàn tiền và thoát. Khi cầm nước, quan sát, uống hoặc đến gần sọt, bảng tự thay các dòng hướng dẫn tương ứng.
 
 Camera điện ảnh mặc định tắt (V bật lại nếu cần). Góc tương tác chính diện đã tiến gần hơn nhưng vẫn căn để thấy trọn máy. Dung tích hiển thị bằng thanh ngang có số ml, giảm khi uống. Để bỏ vỏ, đứng gần và ngắm vào thân hoặc miệng sọt rồi nhấn E/Q; không cần ngắm đúng một điểm nhỏ. Máng trượt nằm phía trong mặt ốp dưới máy, nhìn rõ khi bật X-Ray.
 
@@ -162,7 +160,7 @@ Camera điện ảnh mặc định tắt (V bật lại nếu cần). Góc tươ
 
 Máy đặt trên sân thoáng phía trước tòa nhà VKU, cách mái sảnh và cửa kính của tòa nhà một khoảng rõ ràng. Không có trần, tường hay vách kính bao quanh khu vực máy. Mặt tiền tham khảo ảnh mới: hai cánh nhà sáng màu, dãy cửa sổ xanh, khối kính trung tâm với logo VKU, biển trường, mái đón có cột và bậc dẫn vào cửa.
 
-Sân gồm nền lát đá và lối gạch đỏ phía trước, độ phản chiếu nhẹ hơn nền trong nhà. Bầu trời có gradient và mây procedural. Hai bên có ghế gỗ–kim loại, cây cọ, cây bóng mát và bồn cây thấp; lối đi và mặt trước máy được giữ thoáng. Bàn, sọt tái chế cùng toàn bộ thao tác mua nước giữ nguyên. Camera có thể đi quanh sân, có va chạm với ghế, cây, bồn cây và dừng trước bậc vào tòa nhà.
+Sân gồm nền lát đá và lối gạch đỏ phía trước, độ phản chiếu nhẹ hơn nền trong nhà. Bầu trời có gradient và mây procedural. Hai bên có ghế gỗ–kim loại, cây cọ, cây bóng mát và bồn cây thấp; lối đi và mặt trước máy được giữ thoáng. Sọt tái chế cùng toàn bộ thao tác mua nước giữ nguyên. Camera có thể đi quanh sân, có va chạm với ghế, cây, bồn cây và dừng trước bậc vào tòa nhà.
 
 Phản chiếu phẳng dùng framebuffer ở nửa độ phân giải mỗi chiều, làm mờ nhẹ và trộn với vật liệu sân. `RendererModes` kiểm tra shader, ba chế độ hiển thị, khôi phục framebuffer và đổi kích thước. `CameraControls` kiểm tra không còn tường trong nhà cũ và vùng va chạm của ghế ngoài sân. Kiến trúc là mô hình procedural lấy cảm hứng từ ảnh, không phải bản sao khảo sát chính xác.
 
@@ -170,8 +168,20 @@ Phản chiếu phẳng dùng framebuffer ở nửa độ phân giải mỗi chi�
 
 ### Cụm tiện ích bên trái, vuông góc mặt tiền
 
-Cảnh hiện có đúng **2 ghế, 2 cây**, cùng máy bán nước, bàn và sọt, xếp thành hàng ở mé trái sân (trục campus x ≈ -14). Cả cụm xoay 90° so với mặt tiền VKU và quay vào giữa sân; phía trước lối vào tòa nhà được để trống. Các cây và ghế rải rác của bố cục cũ được gom vào cụm này.
+Cảnh hiện có đúng **2 ghế, 2 cây**, cùng máy bán nước và sọt, xếp thành hàng ở mé trái sân (trục campus x ≈ -14). Cả cụm xoay 90° so với mặt tiền VKU và quay vào giữa sân; phía trước lối vào tòa nhà được để trống. Các cây và ghế rải rác của bố cục cũ được gom vào cụm này.
 
-`CampusLayout.h` định nghĩa phép đổi giữa hệ tọa độ khu máy và hệ tọa độ sân trường. Nhờ đó, camera nạp tiền, ray casting keypad, hoạt ảnh nhả hàng, bàn và sọt vẫn dùng cùng hệ tọa độ với máy, còn tòa nhà và vật liệu sân được đổi sang hướng mới. Va chạm ghế/cây và góc nhìn ban đầu được cập nhật theo cụm. `CameraControls` kiểm tra cả bảy vật thể đều ở bên trái và mặt máy vuông góc mặt tiền.
+`CampusLayout.h` định nghĩa phép đổi giữa hệ tọa độ khu máy và hệ tọa độ sân trường. Nhờ đó, camera nạp tiền, ray casting keypad, hoạt ảnh nhả hàng và sọt vẫn dùng cùng hệ tọa độ với máy, còn tòa nhà và vật liệu sân được đổi sang hướng mới. Va chạm ghế/cây và góc nhìn ban đầu được cập nhật theo cụm. `CameraControls` kiểm tra cả sáu vật thể đều ở bên trái và mặt máy vuông góc mặt tiền.
 
 Ảnh bố cục mới: `output/previews/vku-left-layout-preview.png`.
+
+### Chi tiết chai, bàn tay và sinh viên VKU
+
+Bàn đã được xóa khỏi cảnh, vùng va chạm và hướng dẫn tương tác. Chai có đế, gân PET, vai/cổ, các vòng ren, vòng cổ và rãnh bám trên nắp. Nhãn UV được chỉnh chiều để đọc đúng khi quan sát. Giọt lạnh nhỏ kèm điểm sáng bám vào hệ tọa độ sản phẩm; hơi lạnh dùng hạt trong suốt thay vì hình trụ đặc.
+
+Tay được dựng bằng lòng bàn tay, cổ tay, các đốt ngón, khớp và móng. Trong chế độ R, tay trở về một tư thế cố định cạnh camera; chỉ sản phẩm nhận phép xoay/zoom, không dùng tay làm cha của phép xoay sản phẩm.
+
+Hai khối giảng đường A/B màu kem với các dải ngang và cặp cửa sổ được dựng đối xứng sau hàng máy, lấy cảm hứng từ ảnh giảng đường. Mặt tiền VKU và dòng chữ tiếng Việt hiện có được giữ lại.
+
+Có 8 sinh viên procedural đeo ba lô, mặc áo polo trắng, cổ/viền tay xanh–vàng, nẹp đỏ và logo VKU theo ảnh đồng phục. Nhân vật có tóc, mặt, tay/chân phân cấp; tay và chân vung theo nhịp khi đi trên các đường vòng trong sân. Chuyển động dùng thời gian mô phỏng, lượt phản chiếu không làm nhân vật đi nhanh gấp đôi. Đây là hoạt cảnh nền, chưa có hội thoại hoặc AI tương tác với người chơi.
+
+`StudentCrowdRoutes` kiểm tra chuyển động theo thời gian và tuyến đi tránh khu máy; `RendererModes` so sánh khung hình trước/sau để xác nhận nhân vật thực sự chuyển động. Ảnh mới: `output/previews/vku-students-preview.png`, `output/previews/bottle-hand-detail.png`.

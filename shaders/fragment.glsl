@@ -49,7 +49,7 @@ void main() {
     float specular = pow(max(dot(normal, halfDirection), 0.0), 40.0) * 0.18;
     vec3 baseColor = uColor;
     if (uUseTexture) {
-        vec2 uv = vec2(atan(vObjectPosition.z, vObjectPosition.x) / 6.2831853 + 0.5, vObjectPosition.y + 0.5);
+        vec2 uv = vec2(0.5 - atan(vObjectPosition.z, vObjectPosition.x) / 6.2831853, vObjectPosition.y + 0.5);
         baseColor = texture(uLabelTexture, uv).rgb;
     }
     if (uFloor) {
