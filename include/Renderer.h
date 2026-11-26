@@ -30,6 +30,7 @@ private:
     void createProductTextures();
     void drawEnvironment(const glm::mat4& vp);
     void drawCampusArchitecture(const glm::mat4& vp);
+    void drawFountain(const glm::mat4& vp);
     void drawLectureBlocks(const glm::mat4& vp);
     void drawStudents(const glm::mat4& vp);
     void drawHand(const glm::mat4& vp, bool pointing, bool gripping);

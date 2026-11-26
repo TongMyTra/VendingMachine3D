@@ -327,6 +327,7 @@ void Renderer::drawText(const glm::mat4& vp, const std::string& text,
 
 void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& product,
                            const glm::vec3& position, bool selected, float opening, bool detailed) {
+    const auto savedParent = parentTransform_;
     activeTexture_ = productTextures_[std::clamp(product.id - 1, 0, 11)];
     const float brightness = selected ? 1.16f : 1.0f;
     const glm::vec3 color = glm::min(product.color * brightness, glm::vec3(1.0f));
@@ -376,26 +377,15 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
         drawCylinder(viewProjection, {position.x, position.y + 0.36f, position.z},
                      {0.13f, 0.12f, 0.13f}, glm::mix(color, clearPlastic, 0.18f));
         drawCylinder(viewProjection, position + glm::vec3(0, -0.266f, 0), {0.285f, 0.025f, 0.285f}, glm::mix(color, glm::vec3(0.7f, 0.83f, 0.86f), 0.35f));
+        if (detailed) {
+            // Molded PET foot and grip rings give the bottle a less featureless silhouette.
+            drawCylinder(viewProjection, position + glm::vec3(0, -0.245f, 0), {0.30f, 0.018f, 0.30f}, {0.70f, 0.85f, 0.86f});
+            drawCylinder(viewProjection, position + glm::vec3(0, 0.17f, 0), {0.29f, 0.016f, 0.29f}, glm::mix(color, clearPlastic, 0.35f));
+        }
         if (detailed) for (float y : {-0.23f, -0.19f, 0.11f, 0.15f})
             drawCylinder(viewProjection, position + glm::vec3(0, y, 0), {0.308f, 0.012f, 0.308f}, glm::mix(color, glm::vec3(0.87f, 0.96f, 0.98f), 0.23f));
         if (detailed) for (float y : {0.35f, 0.375f, 0.40f})
             drawCylinder(viewProjection, position + glm::vec3(0, y, 0), {0.145f, 0.010f, 0.145f}, {0.63f, 0.80f, 0.83f});
-        const glm::vec3 label = product.id == 5 ? glm::vec3(0.15f, 0.48f, 0.72f) :
-            product.id == 6 ? glm::vec3(0.92f, 0.30f, 0.09f) : product.id == 7 ? glm::vec3(0.38f, 0.65f, 0.18f) :
-            product.id == 8 ? glm::vec3(0.83f, 0.34f, 0.41f) : product.id == 10 ? glm::vec3(0.80f, 0.28f, 0.45f) :
-            glm::vec3(0.34f, 0.59f, 0.35f);
-        drawBox(viewProjection, {position.x, position.y - 0.005f, position.z + 0.292f},
-                {0.36f, 0.24f, 0.018f}, {0.97f, 0.94f, 0.82f});
-        drawBox(viewProjection, {position.x, position.y + 0.103f, position.z + 0.305f},
-                {0.35f, 0.035f, 0.012f}, label);
-        drawBox(viewProjection, {position.x, position.y - 0.111f, position.z + 0.305f},
-                {0.35f, 0.028f, 0.012f}, label);
-        if (detailed) {
-            drawText(viewProjection, productCode(product.id - 1),
-                     {position.x, position.y + 0.035f, position.z + 0.318f}, 0.048f, {0.12f, 0.28f, 0.23f});
-            drawText(viewProjection, product.id == 5 ? "PURE" : product.id == 6 ? "ORANGE" : product.id == 7 ? "APPLE" : product.id == 8 ? "PEACH" : product.id == 10 ? "STRAWBERRY" : "MATCHA",
-                     {position.x, position.y - 0.055f, position.z + 0.318f}, 0.034f, label);
-        }
         if (opening < 1.0f) {
             const auto base = parentTransform_;
             const float twist = std::clamp((opening - 0.15f) / 0.65f, 0.0f, 1.0f);
@@ -466,6 +456,8 @@ void Renderer::drawProduct(const glm::mat4& viewProjection, const Product& produ
         drawBox(viewProjection, {position.x, position.y - 0.36f, position.z + 0.02f},
                 {0.48f, 0.018f, 0.42f}, {0.20f, 0.96f, 0.86f}, 1.1f);
     }
+    parentTransform_ = savedParent;
+    useTexture_ = false;
 }
 
 void Renderer::render(const VendingMachine& machine, const Animation& animation,
@@ -799,7 +791,7 @@ void Renderer::render(const VendingMachine& machine, const Animation& animation,
         drawBox(viewProjection, {0, 0.02f, 0.56f}, {1.19f, 0.52f, 0.018f}, {0.88f, 0.68f, 0.49f});
         drawText(viewProjection, "MINT FRESH", {0, 0.06f, 0.575f}, 0.105f, {0.37f, 0.30f, 0.22f});
         parentTransform_ = glm::mat4(1.0f);
-    } else {
+    } else if (staff && staff->active()) {
         const bool boxOpen = staff && staff->crateOpen();
         if (boxOpen) {
             // Keep the front wall low and split the carton into separate panels so
@@ -1083,7 +1075,6 @@ void Renderer::drawHeldDrink(const glm::mat4& vp, const Camera& camera, const He
         const glm::vec3 target = bottle ? glm::vec3(remove * 0.30f, 0.49f + twist * 0.16f + remove * 0.15f, 0) : glm::vec3(0, 0.39f, 0.07f);
         const auto handPosition = glm::mix(glm::vec3(-0.45f, -0.20f, 0.05f), target, reach);
         parentTransform_ = bottleFrame * glm::translate(glm::mat4(1), handPosition);
-        if (bottle) parentTransform_ *= glm::rotate(glm::mat4(1), twist * glm::two_pi<float>() * 4, glm::vec3(0, 1, 0));
         parentTransform_ *= glm::translate(glm::mat4(1), {-0.17f, 0.02f, 0}) *
             glm::rotate(glm::mat4(1), -glm::half_pi<float>(), glm::vec3(0, 0, 1));
         drawHand(vp, !bottle, bottle);
@@ -1178,6 +1169,7 @@ void Renderer::drawEnvironment(const glm::mat4& vp) {
     }
     drawCampusArchitecture(vp);
     drawLectureBlocks(vp);
+    drawFountain(vp);
     drawStudents(vp);
     const auto initial = parentTransform_;
     auto plant = [&](glm::vec3 base, float scale, bool palm) {
@@ -1283,26 +1275,134 @@ void Renderer::update(float dt) {
     sceneTime_ += std::max(dt, 0.0f);
 }
 
+void Renderer::drawFountain(const glm::mat4& vp) {
+    const auto previous = parentTransform_;
+    // Center it on the brick promenade, in the courtyard between the two lecture halls.
+    const auto fountainFrame = CampusLayout::campusToStation() *
+        glm::translate(glm::mat4(1.0f), {0.0f, -0.08f, 16.0f});
+    parentTransform_ = fountainFrame;
+
+    const glm::vec3 paleStone{0.76f, 0.79f, 0.75f};
+    const glm::vec3 darkStone{0.19f, 0.29f, 0.31f};
+    const glm::vec3 aqua{0.10f, 0.66f, 0.70f};
+    // Broad circular paving breaks the brick path into a small campus plaza.
+    drawCylinder(vp, {0, 0.12f, 0}, {16.4f, 0.26f, 16.4f}, paleStone);
+    drawCylinder(vp, {0, 0.275f, 0}, {15.7f, 0.07f, 15.7f}, {0.88f, 0.88f, 0.81f});
+    drawCylinder(vp, {0, 0.34f, 0}, {12.2f, 0.08f, 12.2f}, {0.68f, 0.74f, 0.71f});
+
+    // Layered dark-stone basin, polished coping and turquoise water.
+    drawCylinder(vp, {0, 0.47f, 0}, {10.7f, 0.34f, 10.7f}, darkStone);
+    drawCylinder(vp, {0, 0.65f, 0}, {10.9f, 0.10f, 10.9f}, {0.56f, 0.64f, 0.62f});
+    drawCylinder(vp, {0, 0.72f, 0}, {10.35f, 0.06f, 10.35f}, {0.84f, 0.88f, 0.82f});
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    drawMesh(vp, {0, 0.735f, 0}, {9.95f, 0.035f, 9.95f}, aqua,
+             cylinderFirst_, cylinderCount_, 0.88f);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    drawCylinder(vp, {0, 0.77f, 0}, {9.65f, 0.035f, 9.65f}, {0.12f, 0.55f, 0.61f});
+    drawMesh(vp, {0, 0.79f, 0}, {9.48f, 0.018f, 9.48f}, {0.17f, 0.72f, 0.75f},
+             cylinderFirst_, cylinderCount_, 0.90f);
+
+    // Central sculptural fountain: stepped pedestal, tapered stone form and crown.
+    drawCylinder(vp, {0, 0.91f, 0}, {1.72f, 0.22f, 1.72f}, paleStone);
+    drawCylinder(vp, {0, 1.08f, 0}, {1.25f, 0.14f, 1.25f}, {0.87f, 0.89f, 0.82f});
+    drawCylinder(vp, {0, 2.12f, 0}, {0.70f, 2.05f, 0.70f}, {0.91f, 0.92f, 0.86f}, true);
+    drawCylinder(vp, {0, 3.13f, 0}, {0.42f, 0.10f, 0.42f}, {0.78f, 0.85f, 0.81f});
+    for (float side : {-1.0f, 1.0f}) {
+        parentTransform_ = fountainFrame *
+            glm::translate(glm::mat4(1.0f), {side * 0.20f, 2.20f, 0.0f}) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(side * 11.0f), glm::vec3(0, 0, 1));
+        drawCylinder(vp, {0, 0.35f, 0}, {0.24f, 1.70f, 0.30f}, {0.96f, 0.96f, 0.90f}, true);
+    }
+    parentTransform_ = fountainFrame;
+
+    // Dozens of narrow, animated water streams arc inward and fall back into the pool.
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    constexpr int jetCount = 24;
+    for (int jet = 0; jet < jetCount; ++jet) {
+        const float angle = glm::two_pi<float>() * jet / jetCount;
+        const float pulse = 0.88f + 0.12f * std::sin(sceneTime_ * 1.8f + jet * 0.83f);
+        const float startRadius = 3.92f;
+        const float endRadius = 2.25f + 0.20f * std::sin(jet * 2.1f);
+        const float height = (1.35f + 0.38f * (0.5f + 0.5f * std::sin(jet * 1.71f))) * pulse;
+        auto streamPoint = [&](float t) {
+            const float radius = glm::mix(startRadius, endRadius, t);
+            const float arc = std::sin(glm::pi<float>() * t);
+            const float ripple = 0.035f * std::sin(sceneTime_ * 3.0f + t * 12.0f + jet);
+            return glm::vec3(std::cos(angle) * radius, 0.81f + arc * height + ripple * arc,
+                             std::sin(angle) * radius);
+        };
+        for (int segment = 0; segment < 9; ++segment) {
+            const float t0 = segment / 9.0f;
+            const float t1 = (segment + 1) / 9.0f;
+            const auto a = streamPoint(t0), b = streamPoint(t1);
+            const auto delta = b - a;
+            const auto direction = glm::normalize(delta);
+            const glm::quat streamRotation = glm::normalize(glm::quat(
+                1.0f + direction.y, direction.z, 0.0f, -direction.x));
+            parentTransform_ = fountainFrame *
+                glm::translate(glm::mat4(1.0f), (a + b) * 0.5f) *
+                glm::mat4_cast(streamRotation);
+            drawMesh(vp, glm::vec3(0), {0.040f, glm::length(delta), 0.040f},
+                     {0.74f, 0.94f, 1.0f}, cylinderFirst_, cylinderCount_, 0.46f, 0.04f);
+        }
+        // Bright moving beads make the streams read as water instead of rigid rods.
+        for (int drop = 0; drop < 2; ++drop) {
+            float t = std::fmod(sceneTime_ * (0.48f + jet % 4 * 0.035f) + jet * 0.137f + drop * 0.50f, 1.0f);
+            const auto point = streamPoint(t);
+            parentTransform_ = fountainFrame;
+            drawMesh(vp, point, {0.075f, 0.11f, 0.075f}, {0.88f, 0.98f, 1.0f},
+                     sphereFirst_, sphereCount_, 0.85f, 0.08f);
+        }
+    }
+    // Short vertical center jets rise above the sculpture and shimmer independently.
+    for (int jet = 0; jet < 7; ++jet) {
+        const float angle = glm::two_pi<float>() * jet / 7.0f;
+        const float radius = jet == 0 ? 0.0f : 0.62f;
+        const float height = 2.0f + 0.55f * std::sin(sceneTime_ * 2.2f + jet * 1.4f);
+        const float x = std::cos(angle) * radius, z = std::sin(angle) * radius;
+        parentTransform_ = fountainFrame *
+            glm::translate(glm::mat4(1.0f), {x, 0.81f + height * 0.5f, z});
+        drawMesh(vp, glm::vec3(0), {0.055f, height, 0.055f}, {0.79f, 0.96f, 1.0f},
+                 cylinderFirst_, cylinderCount_, 0.48f, 0.04f);
+        parentTransform_ = fountainFrame;
+        const float splash = 0.81f + height;
+        drawMesh(vp, {x, splash, z}, {0.10f, 0.13f, 0.10f}, {0.88f, 0.98f, 1.0f},
+                 sphereFirst_, sphereCount_, 0.82f, 0.08f);
+    }
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    parentTransform_ = previous;
+}
+
 void Renderer::drawHand(const glm::mat4& vp, bool pointing, bool gripping) {
     const auto hand = parentTransform_;
     const glm::vec3 skin{0.87f, 0.66f, 0.52f};
     const glm::vec3 sleeve{0.27f, 0.51f, 0.44f};
-    drawCylinder(vp, {0, -0.22f, 0}, {0.125f, 0.30f, 0.12f}, sleeve);
-    drawCylinder(vp, {0, -0.085f, 0}, {0.137f, 0.045f, 0.13f}, {0.42f, 0.68f, 0.57f});
-    drawMesh(vp, {0, 0.025f, 0}, {0.137f, 0.16f, 0.09f}, skin, sphereFirst_, sphereCount_);
-    const float x[] = {-0.083f, -0.028f, 0.028f, 0.083f};
-    const float length[] = {0.125f, 0.16f, 0.15f, 0.125f};
+    drawMesh(vp, {0, -0.22f, 0}, {0.12f, 0.31f, 0.115f}, sleeve, sphereFirst_, sphereCount_);
+    drawMesh(vp, {0, -0.075f, 0}, {0.135f, 0.055f, 0.13f}, {0.42f, 0.68f, 0.57f}, sphereFirst_, sphereCount_);
+    // A compact, softly rounded hand reads more naturally than exposed stick-like fingers.
+    drawMesh(vp, {0, 0.025f, 0}, {0.145f, 0.17f, 0.105f}, skin, sphereFirst_, sphereCount_);
+    const float x[] = {-0.086f, -0.030f, 0.030f, 0.086f};
+    const float lengths[] = {0.115f, 0.145f, 0.135f, 0.105f};
     for (int finger = 0; finger < 4; ++finger) {
-        parentTransform_ = hand * glm::translate(glm::mat4(1), {x[finger], 0.105f, 0}) *
-            glm::rotate(glm::mat4(1), glm::radians(pointing && finger != 3 ? -42.0f : gripping ? -28.0f : -7.0f),
-                        glm::vec3(1, 0, 0));
-        drawCylinder(vp, {0, length[finger] * 0.43f, 0}, {0.034f, length[finger], 0.034f}, skin);
-        drawMesh(vp, {0, length[finger] * 0.91f, 0}, {0.035f, 0.038f, 0.035f}, skin, sphereFirst_, sphereCount_);
+        const float curl = pointing && finger != 3 ? -0.55f : gripping ? -0.48f : -0.12f;
+        const float length = lengths[finger];
+        parentTransform_ = hand * glm::translate(glm::mat4(1), {x[finger], 0.095f, 0});
+        drawMesh(vp, {0, length * 0.34f, 0}, {0.034f, length * 0.56f, 0.034f}, skin, sphereFirst_, sphereCount_);
+        parentTransform_ *= glm::translate(glm::mat4(1), {0, length * 0.57f, 0}) *
+            glm::rotate(glm::mat4(1), curl, glm::vec3(1, 0, 0));
+        drawMesh(vp, {0, length * 0.25f, 0}, {0.030f, length * 0.46f, 0.030f}, skin, sphereFirst_, sphereCount_);
+        drawMesh(vp, {0, length * 0.48f, 0}, {0.029f, 0.032f, 0.029f}, skin, sphereFirst_, sphereCount_);
     }
-    parentTransform_ = hand * glm::translate(glm::mat4(1), {-0.105f, 0.015f, 0}) *
-        glm::rotate(glm::mat4(1), glm::radians(46.0f), glm::vec3(0, 0, 1));
-    drawCylinder(vp, {0, 0.045f, 0}, {0.038f, 0.105f, 0.037f}, skin);
-    drawMesh(vp, {0, 0.095f, 0}, {0.039f, 0.04f, 0.037f}, skin, sphereFirst_, sphereCount_);
+    parentTransform_ = hand * glm::translate(glm::mat4(1), {-0.105f, 0.005f, 0}) *
+        glm::rotate(glm::mat4(1), glm::radians(40.0f), glm::vec3(0, 0, 1));
+    drawMesh(vp, {0, 0.052f, 0}, {0.044f, 0.095f, 0.040f}, skin, sphereFirst_, sphereCount_);
+    drawMesh(vp, {0, 0.098f, 0}, {0.036f, 0.038f, 0.034f}, skin, sphereFirst_, sphereCount_);
     parentTransform_ = hand;
 }
 
